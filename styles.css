@@ -1,674 +1,402 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* =========================================================
+   Macropad Simulator - styles.css
+   Dark theme built on CSS custom properties (variables).
+   Change the colours in :root and the whole UI follows.
+
+   The page is designed for a LANDSCAPE tablet: it fills the
+   screen exactly (100dvh) and never scrolls. Sizes that depend
+   on screen height use vh units so everything scales together.
+   ========================================================= */
+
+/* ---------- Theme variables ---------- */
+:root {
+  --bg: #0b0d12;                       /* page background */
+  --panel: rgba(255, 255, 255, 0.05);  /* translucent "glass" surfaces */
+  --panel-border: rgba(255, 255, 255, 0.10);
+  --text: #e8ebf3;
+  --text-dim: #8a91a4;
+  --accent: #6c8cff;                   /* overridden per layer below */
+  --accent-glow: rgba(108, 140, 255, 0.45);
+  --danger: #ff5c7a;
+  --ok: #38d9a9;
+  --radius: 14px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  --inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  /* Knob diameter: 26% of screen height, but never smaller than 64px or bigger than 140px */
+  --knob: clamp(64px, 26vh, 140px);
 }
 
-:root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f0f23;
-  --accent: #e94560;
-  --accent-hover: #ff6b6b;
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0b0;
-  --key-bg: #1f1f3a;
-  --key-border: #2d2d4a;
-  --key-active: #e94560;
-  --knob-bg: #1f1f3a;
-  --knob-border: #2d2d4a;
-  --layer-active: #00d9a5;
-  --layer-inactive: #3d3d5a;
-  --shadow: rgba(0, 0, 0, 0.5);
-  --glow: rgba(233, 69, 96, 0.4);
-  --listening-glow: rgba(0, 217, 165, 0.6);
-}
+/* Each layer gets its own accent colour; app.js sets <body data-layer="n"> */
+body[data-layer="0"] { --accent: #6c8cff; --accent-glow: rgba(108, 140, 255, 0.45); }
+body[data-layer="1"] { --accent: #38d9a9; --accent-glow: rgba(56, 217, 169, 0.45); }
+body[data-layer="2"] { --accent: #ffa94d; --accent-glow: rgba(255, 169, 77, 0.45); }
+body[data-layer="3"] { --accent: #e599f7; --accent-glow: rgba(229, 153, 247, 0.45); }
+
+/* ---------- Base ---------- */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
 
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
+  margin: 0;
+  height: 100dvh;                    /* dvh = the visible height, even with browser toolbars */
+  overflow: hidden;                  /* landscape pad never scrolls */
+  /* keep clear of notches / rounded corners */
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* soft glow behind the pad that follows the layer's accent colour */
+  background:
+    radial-gradient(ellipse at 50% 20%, var(--accent-glow), transparent 55%),
+    var(--bg);
+  transition: background 0.4s ease;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;         /* no pull-to-refresh / rubber-banding */
 }
 
+/* ---------- The macropad body ---------- */
 .macropad {
-  background: var(--bg-secondary);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 
-    0 20px 60px var(--shadow),
-    0 0 0 1px var(--key-border),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  max-width: 1000px;
   width: 100%;
-  max-height: 90vh;
-  overflow: hidden;
+  height: 100%;
+  padding: 12px;
+  border-radius: 22px;
+  background: linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow), var(--inset-highlight);
+  backdrop-filter: blur(14px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);   /* top bar, then everything else */
+  gap: 10px;
+
+  /* Touch behaviour: no scrolling/zooming gestures, no text selection, no long-press menu */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
-.macropad-header {
+/* ---------- Top bar ---------- */
+.topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--key-border);
+  flex-wrap: wrap;
+  gap: 8px;
 }
-
-.macropad-header h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.layer-indicator {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-#current-layer {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--layer-active);
+.pad-title {
+  margin: 0 auto 0 0;               /* auto right margin pushes everything else to the right */
+  font-size: 1rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 1px;
 }
-
-.btn-layer-toggle {
-  background: var(--key-bg);
-  border: 1px solid var(--key-border);
-  color: var(--text-secondary);
+.layer-indicator {
   padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-layer-toggle:hover {
-  border-color: var(--accent);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
-.macropad-body {
+/* Device link pill: grey dot = disconnected, green dot = connected */
+.device-pill {
   display: flex;
-  gap: 24px;
-  height: calc(100% - 120px);
-  min-height: 0;
-  overflow: hidden;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+}
+.device-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5b6172;
+}
+.device-pill.connected { color: var(--text); }
+.device-pill.connected .device-dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  box-shadow: var(--inset-highlight);
+  transition: transform 0.08s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.25); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #0b0d12; border-color: transparent; font-weight: 600; }
+.btn-primary:hover { background: var(--accent); filter: brightness(1.1); }
+.btn-danger { color: var(--danger); }
+
+/* Fingers need bigger targets than mouse pointers */
+@media (pointer: coarse) {
+  .btn { padding: 10px 16px; }
 }
 
-.left-panel {
-  flex: 1;
-  overflow-y: auto;
-  min-width: 0;
+.icon-btn {
+  appearance: none; border: none; background: transparent;
+  color: var(--text-dim); font-size: 1.6rem; line-height: 1; cursor: pointer;
+}
+.icon-btn:hover { color: var(--text); }
+
+/* ---------- Main area: keys on the left half, side pane on the right half ---------- */
+.pad-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-height: 0;                    /* lets grid children shrink instead of overflowing */
 }
 
-.right-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 280px;
-  flex-shrink: 0;
-  overflow-y: auto;
-}
-
+/* LEFT: 12 keys, 3 columns x 4 rows, stretched to fill the whole half */
+.keys-pane { min-height: 0; min-width: 0; }
 .custom-keys {
+  height: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
   gap: 10px;
 }
 
-.key {
-  aspect-ratio: 1;
-  background: var(--key-bg);
-  border: 2px solid var(--key-border);
-  border-radius: 12px;
+/* RIGHT: layer keys at the top, dials anchored at the bottom; no activity log */
+.side-pane {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: all 0.1s ease;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 
-    0 4px 12px var(--shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.key:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-  box-shadow: 
-    0 8px 20px var(--shadow),
-    0 0 15px var(--glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.key:active {
-  transform: translateY(1px) scale(0.98);
-  box-shadow: 
-    0 2px 8px var(--shadow),
-    inset 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.key.pressed {
-  background: var(--key-active);
-  border-color: var(--key-active);
-  box-shadow: 
-    0 2px 8px var(--shadow),
-    0 0 20px var(--glow),
-    inset 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.key.listening {
-  border-color: var(--layer-active);
-  box-shadow: 
-    0 4px 12px var(--shadow),
-    0 0 20px var(--listening-glow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.key-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-primary);
-  z-index: 1;
-  word-break: break-word;
-  text-align: center;
-  padding: 0 4px;
-}
-
-.key-subtext {
-  font-size: 0.5rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  z-index: 1;
-  text-align: center;
-  padding: 0 4px;
-}
-
-.key::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%);
-  pointer-events: none;
-}
-
-.layer-keys-section {
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--key-border);
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
 }
 
 .layer-keys {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
 }
 
-.layer-key {
-  width: 48px;
-  height: 48px;
-  background: var(--key-bg);
-  border: 2px solid var(--key-border);
-  border-radius: 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+/* ---------- Keys ---------- */
+.key {
   position: relative;
-  box-shadow: 
-    0 3px 10px var(--shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.layer-key:hover {
-  border-color: var(--layer-active);
-  transform: translateY(-1px);
-}
-
-.layer-key.active {
-  background: var(--layer-active);
-  border-color: var(--layer-active);
-  color: var(--bg-primary);
-  box-shadow: 
-    0 3px 10px var(--shadow),
-    0 0 15px rgba(0, 217, 165, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.layer-key:active {
-  transform: scale(0.96);
-}
-
-.knobs-section {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
-  padding: 16px 0 0;
-}
-
-.knob-container {
+  appearance: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 2px;
+  min-height: 0;
+  padding: 6px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.5), var(--inset-highlight);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, border-color 0.2s ease, background 0.2s ease;
 }
-
-.knob {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: var(--knob-bg);
-  border: 3px solid var(--knob-border);
-  position: relative;
-  cursor: grab;
-  transition: all 0.15s ease;
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob:hover {
+.key:hover { border-color: var(--accent); }
+/* "Pressed" look: key sinks down and glows */
+.key.pressed {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.5), 0 0 18px var(--accent-glow), var(--inset-highlight);
   border-color: var(--accent);
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 20px var(--glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, var(--accent-glow), rgba(255,255,255,0.04));
 }
+.key-empty { opacity: 0.45; }
 
-.knob:active {
-  cursor: grabbing;
-  transform: scale(0.98);
-}
-
-.knob.rotating {
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 30px var(--glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob.listening {
-  border-color: var(--layer-active);
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 30px var(--listening-glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob-indicator {
+/* Text scales with screen height so it stays readable on any tablet */
+.key-label { font-size: clamp(0.8rem, 2.8vh, 1.3rem); font-weight: 600; text-align: center; line-height: 1.1; }
+.key-sub   { font-size: clamp(0.6rem, 1.7vh, 0.85rem); color: var(--text-dim); text-align: center; }
+/* Tiny hint in the corner telling you which computer key triggers this one */
+.key-hint {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 35px;
-  background: var(--accent);
-  border-radius: 4px;
-  transform-origin: bottom center;
-  transform: translate(-50%, -100%) rotate(-135deg);
-  box-shadow: 0 0 10px var(--glow);
+  top: 4px;
+  right: 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.55rem;
+  color: var(--text-dim);
+  opacity: 0.7;
 }
 
+/* Layer keys are short and wide; the one for the current layer is lit */
+.layer-keys .key { height: clamp(44px, 13vh, 76px); }
+.layer-keys .key.active-layer {
+  border-color: var(--accent);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 14px var(--accent-glow), var(--inset-highlight);
+}
+.layer-keys .key.active-layer .key-label { color: var(--accent); }
+
+/* ---------- Knobs (bottom of the right half) ---------- */
+.knobs {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+}
+.knob-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
 .knob-label {
   font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
 }
+.knob-dial {
+  position: relative;
+  width: var(--knob);
+  height: var(--knob);
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;                /* stops the page scrolling while dragging on touch screens */
+  background: radial-gradient(circle at 35% 30%, #3a3f4f, #14161d 70%);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow), var(--inset-highlight), inset 0 -6px 12px rgba(0,0,0,0.5);
+  transition: box-shadow 0.2s ease;
+  outline: none;
+}
+.knob-dial:hover { box-shadow: var(--shadow), var(--inset-highlight), inset 0 -6px 12px rgba(0,0,0,0.5), 0 0 16px var(--accent-glow); }
+.knob-dial:focus-visible { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.knob-dial.rotating { cursor: grabbing; box-shadow: var(--shadow), inset 0 -6px 12px rgba(0,0,0,0.5), 0 0 24px var(--accent-glow); }
 
+/* The cap spins; --angle is set from JavaScript */
+.knob-cap {
+  position: absolute;
+  inset: 0;
+  transform: rotate(var(--angle, 0deg));
+}
+/* The little notch showing where the knob is pointing */
+.knob-cap::before {
+  content: "";
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 4px;
+  height: 24%;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
 .knob-value {
-  font-size: 1.25rem;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
-  min-width: 48px;
-  text-align: center;
+  font-size: clamp(0.9rem, 2.8vh, 1.2rem);
+  font-weight: 600;
 }
 
-.macropad-footer {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--key-border);
-  display: flex;
-  justify-content: center;
-}
-
-.btn-config {
-  background: transparent;
-  border: 1px solid var(--key-border);
-  color: var(--text-secondary);
-  padding: 10px 24px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.btn-config:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(233, 69, 96, 0.1);
-}
-
-.modal {
+/* ---------- Modal ---------- */
+.modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(4px);
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal.hidden {
-  display: none;
-}
-
-.modal-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--key-border);
-  border-radius: 16px;
-  padding: 24px;
-  max-width: 900px;
-  width: 100%;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px var(--shadow);
-}
-
-.modal-content h2 {
-  margin-bottom: 20px;
-  font-size: 1.25rem;
-  font-weight: 600;
-}
-
-.config-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--key-border);
-  padding-bottom: 12px;
-}
-
-.tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.tab-btn:hover {
-  color: var(--text-primary);
-  background: var(--key-bg);
-}
-
-.tab-btn.active {
-  color: var(--accent);
-  background: rgba(233, 69, 96, 0.1);
-}
-
-.tab-panel {
-  display: none;
-}
-
-.tab-panel.active {
-  display: block;
-}
-
-.key-config-grid,
-.layer-config-grid,
-.knob-config-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.key-config-grid {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.layer-config-grid {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.knob-config-grid {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.config-item {
-  background: var(--key-bg);
-  border: 1px solid var(--key-border);
-  border-radius: 10px;
-  padding: 16px;
-}
-
-.config-item label {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.config-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.config-row:last-child {
-  margin-bottom: 0;
-}
-
-.config-item input,
-.config-item select {
-  width: 100%;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--key-border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  color: var(--text-primary);
-  font-size: 0.85rem;
-  transition: border-color 0.2s ease;
-}
-
-.config-item input:focus,
-.config-item select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.config-item input.listening,
-.config-item select.listening {
-  border-color: var(--layer-active);
-  box-shadow: 0 0 15px var(--listening-glow);
-  background: rgba(0, 217, 165, 0.1);
-}
-
-.config-item input::placeholder {
-  color: var(--text-secondary);
-}
-
-.btn-close {
-  width: 100%;
-  margin-top: 24px;
-  background: var(--accent);
-  border: none;
-  color: var(--text-primary);
+  justify-content: center;
   padding: 12px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+/* A [hidden] element must really be hidden even though we set display:flex above */
+.modal-backdrop[hidden] { display: none; }
+
+.modal {
+  width: 100%;
+  max-width: 600px;
+  max-height: 94dvh;                /* leaves room on short landscape screens */
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  background: #151821;
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow), var(--inset-highlight);
+}
+.modal-header, .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+}
+.modal-header h2 { margin: 0; font-size: 1.05rem; }
+.modal-footer { border-top: 1px solid var(--panel-border); }
+
+.tabs { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--panel-border); overflow-x: auto; }
+.tab {
+  appearance: none; background: transparent; border: none;
+  color: var(--text-dim); font: inherit; font-size: 0.85rem;
+  padding: 10px 12px; cursor: pointer; white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.modal-body { padding: 14px 18px; overflow-y: auto; min-height: 0; }
+
+/* ---------- Config form ---------- */
+.cfg-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 0.85rem; }
+.cfg-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 1fr;
+  gap: 6px 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.cfg-row:last-child { border-bottom: none; }
+/* Simpler two-column rows used by the Layer Keys, Knobs and Device tabs */
+.cfg-row-simple { grid-template-columns: 1fr 1fr; }
+.cfg-row-simple .cfg-name { grid-column: 1 / -1; grid-row: auto; font-weight: 600; color: var(--text); font-size: 0.85rem; }
+.cfg-row .cfg-name { font-size: 0.75rem; color: var(--text-dim); grid-row: span 2; }
+.cfg-row .cfg-wide { grid-column: 1 / -1; }
+.cfg-field { display: flex; flex-direction: column; gap: 3px; font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+/* A checkbox with its label text next to it */
+.cfg-check { flex-direction: row; align-items: center; gap: 8px; font-size: 0.85rem; text-transform: none; letter-spacing: normal; color: var(--text); }
+.cfg-check input { width: auto; }
+.cfg-note { font-size: 0.8rem; color: var(--text-dim); line-height: 1.4; }
+
+.modal input, .modal select {
+  width: 100%;
+  padding: 7px 9px;
   border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.modal input:focus, .modal select:focus { outline: none; border-color: var(--accent); }
+.modal input:disabled { opacity: 0.4; }
+.modal option { background: #151821; }
+
+/* ---------- Narrow windows (e.g. a phone, or a desktop window dragged thin) ---------- */
+@media (max-width: 900px) {
+  .pad-title { display: none; }
+  .layer-indicator { margin-right: auto; }
 }
 
-.btn-close:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
-@media (max-width: 1024px) {
-  .macropad {
-    max-width: 100%;
-    border-radius: 16px;
-  }
-  
-  .macropad-body {
-    flex-direction: column;
-    height: auto;
-    max-height: none;
-  }
-  
-  .left-panel {
-    width: 100%;
-  }
-  
-  .right-panel {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-  
-  .layer-keys-section {
-    border-bottom: none;
-    border-right: 1px solid var(--key-border);
-    padding-bottom: 0;
-    padding-right: 20px;
-  }
-  
-  .layer-keys {
-    flex-direction: column;
-    gap: 8px;
-  }
-  
-  .knobs-section {
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding-top: 0;
-  }
-}
-
-@media (max-width: 768px) {
-  .macropad {
-    padding: 16px;
-  }
-  
-  .macropad-body {
-    gap: 16px;
-  }
-  
-  .right-panel {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .layer-keys-section {
-    border-right: none;
-    border-bottom: 1px solid var(--key-border);
-    padding-right: 0;
-    padding-bottom: 16px;
-    width: 100%;
-  }
-  
-  .layer-keys {
-    flex-direction: row;
-    justify-content: center;
-  }
-  
-  .knobs-section {
-    flex-direction: row;
-    gap: 24px;
-  }
-  
-  .custom-keys {
-    grid-template-columns: repeat(4, 1fr);
-  }
-  
-  .knob {
-    width: 80px;
-    height: 80px;
-  }
-  
-  .key-config-grid,
-  .layer-config-grid,
-  .knob-config-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .config-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 480px) {
-  .macropad {
-    padding: 12px;
-    border-radius: 12px;
-  }
-  
-  .custom-keys {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-  
-  .key-label {
-    font-size: 0.6rem;
-  }
-  
-  .key-subtext {
-    font-size: 0.45rem;
-  }
-  
-  .layer-key {
-    width: 40px;
-    height: 40px;
-    font-size: 0.55rem;
-  }
-  
-  .knob {
-    width: 70px;
-    height: 70px;
-  }
+/* ---------- Portrait fallback: stack the two halves and allow scrolling ---------- */
+@media (orientation: portrait) {
+  body { height: auto; min-height: 100dvh; overflow: auto; }
+  .macropad { height: auto; touch-action: pan-y; }
+  .pad-body { grid-template-columns: 1fr; }
+  .custom-keys { height: auto; grid-auto-rows: 84px; grid-template-rows: none; }
 }
