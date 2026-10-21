@@ -104,6 +104,12 @@ body {
 }
 
 .left-panel {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.right-panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -112,157 +118,9 @@ body {
   overflow-y: auto;
 }
 
-.right-panel {
-  flex: 1;
-  overflow-y: auto;
-  min-width: 0;
-}
-
-.knobs-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-  padding: 16px 0;
-}
-
-.knob-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.knob {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: var(--knob-bg);
-  border: 3px solid var(--knob-border);
-  position: relative;
-  cursor: grab;
-  transition: all 0.15s ease;
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob:hover {
-  border-color: var(--accent);
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 20px var(--glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob:active {
-  cursor: grabbing;
-  transform: scale(0.98);
-}
-
-.knob.rotating {
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 30px var(--glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob.listening {
-  border-color: var(--layer-active);
-  box-shadow: 
-    0 8px 24px var(--shadow),
-    0 0 30px var(--listening-glow),
-    inset 0 2px 4px rgba(255, 255, 255, 0.05),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.knob-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 8px;
-  height: 35px;
-  background: var(--accent);
-  border-radius: 4px;
-  transform-origin: bottom center;
-  transform: translate(-50%, -100%) rotate(-135deg);
-  box-shadow: 0 0 10px var(--glow);
-}
-
-.knob-label {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.knob-value {
-  font-size: 1.25rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-  min-width: 48px;
-  text-align: center;
-}
-
-.layer-keys-section {
-  padding-top: 8px;
-  border-top: 1px solid var(--key-border);
-}
-
-.layer-keys {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.layer-key {
-  aspect-ratio: 1;
-  background: var(--key-bg);
-  border: 2px solid var(--key-border);
-  border-radius: 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  position: relative;
-  box-shadow: 
-    0 3px 10px var(--shadow),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.layer-key:hover {
-  border-color: var(--layer-active);
-  transform: translateY(-1px);
-}
-
-.layer-key.active {
-  background: var(--layer-active);
-  border-color: var(--layer-active);
-  color: var(--bg-primary);
-  box-shadow: 
-    0 3px 10px var(--shadow),
-    0 0 15px rgba(0, 217, 165, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.layer-key:active {
-  transform: scale(0.96);
-}
-
 .custom-keys {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
@@ -346,6 +204,148 @@ body {
   inset: 0;
   background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%);
   pointer-events: none;
+}
+
+.layer-keys-section {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--key-border);
+}
+
+.layer-keys {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.layer-key {
+  width: 48px;
+  height: 48px;
+  background: var(--key-bg);
+  border: 2px solid var(--key-border);
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  position: relative;
+  box-shadow: 
+    0 3px 10px var(--shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.layer-key:hover {
+  border-color: var(--layer-active);
+  transform: translateY(-1px);
+}
+
+.layer-key.active {
+  background: var(--layer-active);
+  border-color: var(--layer-active);
+  color: var(--bg-primary);
+  box-shadow: 
+    0 3px 10px var(--shadow),
+    0 0 15px rgba(0, 217, 165, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.layer-key:active {
+  transform: scale(0.96);
+}
+
+.knobs-section {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding: 16px 0 0;
+}
+
+.knob-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.knob {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--knob-bg);
+  border: 3px solid var(--knob-border);
+  position: relative;
+  cursor: grab;
+  transition: all 0.15s ease;
+  box-shadow: 
+    0 8px 24px var(--shadow),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.knob:hover {
+  border-color: var(--accent);
+  box-shadow: 
+    0 8px 24px var(--shadow),
+    0 0 20px var(--glow),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.knob:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.knob.rotating {
+  box-shadow: 
+    0 8px 24px var(--shadow),
+    0 0 30px var(--glow),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.knob.listening {
+  border-color: var(--layer-active);
+  box-shadow: 
+    0 8px 24px var(--shadow),
+    0 0 30px var(--listening-glow),
+    inset 0 2px 4px rgba(255, 255, 255, 0.05),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 35px;
+  background: var(--accent);
+  border-radius: 4px;
+  transform-origin: bottom center;
+  transform: translate(-50%, -100%) rotate(-135deg);
+  box-shadow: 0 0 10px var(--glow);
+}
+
+.knob-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.knob-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  min-width: 48px;
+  text-align: center;
 }
 
 .macropad-footer {
@@ -561,29 +561,32 @@ body {
   
   .left-panel {
     width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  
-  .knobs-section {
-    flex-direction: row;
-    padding: 8px 0;
-  }
-  
-  .layer-keys-section {
-    border-top: none;
-    border-left: 1px solid var(--key-border);
-    padding-top: 0;
-    padding-left: 20px;
-  }
-  
-  .layer-keys {
-    grid-template-columns: repeat(4, 1fr);
   }
   
   .right-panel {
     width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  
+  .layer-keys-section {
+    border-bottom: none;
+    border-right: 1px solid var(--key-border);
+    padding-bottom: 0;
+    padding-right: 20px;
+  }
+  
+  .layer-keys {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .knobs-section {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding-top: 0;
   }
 }
 
@@ -596,30 +599,31 @@ body {
     gap: 16px;
   }
   
-  .left-panel {
+  .right-panel {
     flex-direction: column;
     align-items: center;
   }
   
-  .knobs-section {
-    flex-direction: column;
-    gap: 16px;
-  }
-  
   .layer-keys-section {
-    border-left: none;
-    border-top: 1px solid var(--key-border);
-    padding-left: 0;
-    padding-top: 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--key-border);
+    padding-right: 0;
+    padding-bottom: 16px;
     width: 100%;
   }
   
   .layer-keys {
-    grid-template-columns: repeat(4, 1fr);
+    flex-direction: row;
+    justify-content: center;
+  }
+  
+  .knobs-section {
+    flex-direction: row;
+    gap: 24px;
   }
   
   .custom-keys {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   
   .knob {
@@ -655,5 +659,16 @@ body {
   
   .key-subtext {
     font-size: 0.45rem;
+  }
+  
+  .layer-key {
+    width: 40px;
+    height: 40px;
+    font-size: 0.55rem;
+  }
+  
+  .knob {
+    width: 70px;
+    height: 70px;
   }
 }
