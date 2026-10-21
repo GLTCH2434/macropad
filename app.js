@@ -27,7 +27,8 @@ const state = {
     valueParam: ''
   })),
   pressedKeys: new Set(),
-  knobDrag: { active: false, knobIndex: null, startY: 0, startValue: 0 }
+  knobDrag: { active: false, knobIndex: null, startY: 0, startValue: 0 },
+  keyCapture: { active: false, targetInput: null, targetKeyIndex: null, targetField: null }
 };
 
 const keyActions = [
@@ -49,6 +50,8 @@ const knobActions = [
   { value: 'zoom', label: 'Zoom' },
   { value: 'custom', label: 'Custom Value' }
 ];
+
+const keyCaptureActions = ['keypress', 'shortcut'];
 
 function init() {
   renderCustomKeys();
@@ -125,12 +128,12 @@ function setupEventListeners() {
   });
 
   document.getElementById('key-config-grid').addEventListener('input', handleConfigChange);
+  document.getElementById('key-config-grid').addEventListener('focusin', handleConfigFocus);
+  document.getElementById('key-config-grid').addEventListener('focusout', handleConfigBlur);
   document.getElementById('layer-config-grid').addEventListener('input', handleConfigChange);
   document.getElementById('knob-config-grid').addEventListener('input', handleConfigChange);
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeConfig();
-  });
+  document.addEventListener('keydown', handleGlobalKeydown);
 }
 
 function handleKeyDown(e) {
@@ -320,11 +323,13 @@ function openConfig() {
 }
 
 function closeConfig() {
+  stopKeyCapture();
   document.getElementById('config-modal').classList.add('hidden');
   saveState();
 }
 
 function switchTab(tab) {
+  stopKeyCapture();
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
@@ -354,7 +359,7 @@ function renderKeyConfig() {
         <select data-key-index="${index}" data-field="action">
           ${keyActions.map(a => `<option value="${a.value}" ${a.value === key.action ? 'selected' : ''}>${a.label}</option>`).join('')}
         </select>
-        <input type="text" placeholder="Value" value="${escapeHtml(key.value)}" data-key-index="${index}" data-field="value">
+        <input type="text" placeholder="Value" value="${escapeHtml(key.value)}" data-key-index="${index}" data-field="value" ${keyCaptureActions.includes(key.action) ? 'data-capture="true"' : ''}>
       </div>
     </div>
   `).join('');
@@ -414,6 +419,13 @@ function handleConfigChange(e) {
     const index = parseInt(target.dataset.keyIndex);
     state.customKeys[state.currentLayer][index][field] = target.type === 'number' ? parseFloat(target.value) : target.value;
     if (field === 'label' || field === 'subtext') renderCustomKeys();
+    if (field === 'action') {
+      const valueInput = target.closest('.config-item').querySelector('[data-field="value"]');
+      if (valueInput) {
+        valueInput.dataset.capture = keyCaptureActions.includes(target.value) ? 'true' : '';
+        valueInput.placeholder = keyCaptureActions.includes(target.value) ? 'Press key combination...' : 'Value';
+      }
+    }
   } else if (target.dataset.layerIndex !== undefined) {
     const index = parseInt(target.dataset.layerIndex);
     state.layerKeys[index][field] = target.type === 'number' ? parseInt(target.value) : target.value;
@@ -424,6 +436,124 @@ function handleConfigChange(e) {
     if (field === 'label') renderKnobs();
     if (field === 'min' || field === 'max' || field === 'step') renderKnobs();
   }
+}
+
+function handleConfigFocus(e) {
+  const target = e.target;
+  if (target.dataset.field === 'value' && target.dataset.capture === 'true') {
+    startKeyCapture(target, parseInt(target.dataset.keyIndex), 'value');
+  }
+}
+
+function handleConfigBlur(e) {
+  const target = e.target;
+  if (target.dataset.field === 'value' && target.dataset.capture === 'true') {
+    if (state.keyCapture.targetInput === target) {
+      stopKeyCapture();
+    }
+  }
+}
+
+function startKeyCapture(input, keyIndex, field) {
+  if (state.keyCapture.active) return;
+  
+  state.keyCapture = {
+    active: true,
+    targetInput: input,
+    targetKeyIndex: keyIndex,
+    targetField: field,
+    keysPressed: new Set()
+  };
+  
+  input.classList.add('listening');
+  input.placeholder = 'Listening...';
+  input.value = '';
+}
+
+function stopKeyCapture() {
+  if (state.keyCapture.active && state.keyCapture.targetInput) {
+    state.keyCapture.targetInput.classList.remove('listening');
+    state.keyCapture.targetInput.placeholder = 'Press key combination...';
+  }
+  state.keyCapture = { active: false, targetInput: null, targetKeyIndex: null, targetField: null, keysPressed: new Set() };
+}
+
+function handleGlobalKeydown(e) {
+  if (e.key === 'Escape') {
+    if (state.keyCapture.active) {
+      stopKeyCapture();
+    } else {
+      closeConfig();
+    }
+    return;
+  }
+  
+  if (!state.keyCapture.active) return;
+  
+  e.preventDefault();
+  
+  const key = formatKey(e);
+  state.keyCapture.keysPressed.add(key);
+  
+  const combination = formatKeyCombination(state.keyCapture.keysPressed);
+  state.keyCapture.targetInput.value = combination;
+  
+  state.customKeys[state.currentLayer][state.keyCapture.targetKeyIndex][state.keyCapture.targetField] = combination;
+}
+
+function handleGlobalKeyup(e) {
+  if (!state.keyCapture.active) return;
+  
+  const key = formatKey(e);
+  state.keyCapture.keysPressed.delete(key);
+}
+
+function formatKey(e) {
+  const parts = [];
+  
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.metaKey) parts.push('Cmd');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  
+  let key = e.key;
+  
+  if (key === 'Control' || key === 'Meta' || key === 'Alt' || key === 'Shift') {
+    return null;
+  }
+  
+  if (key === ' ') key = 'Space';
+  else if (key === 'Escape') key = 'Esc';
+  else if (key === 'ArrowUp') key = 'Up';
+  else if (key === 'ArrowDown') key = 'Down';
+  else if (key === 'ArrowLeft') key = 'Left';
+  else if (key === 'ArrowRight') key = 'Right';
+  else if (key.length === 1) key = key.toUpperCase();
+  else key = key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+  
+  parts.push(key);
+  return parts.join('+');
+}
+
+function formatKeyCombination(keysPressed) {
+  if (keysPressed.size === 0) return '';
+  
+  const allParts = new Set();
+  keysPressed.forEach(combo => {
+    combo.split('+').forEach(part => allParts.add(part));
+  });
+  
+  const order = ['Ctrl', 'Cmd', 'Alt', 'Shift'];
+  const sorted = [...allParts].sort((a, b) => {
+    const aIndex = order.indexOf(a);
+    const bIndex = order.indexOf(b);
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return a.localeCompare(b);
+  });
+  
+  return sorted.join(' + ');
 }
 
 function saveState() {
@@ -452,3 +582,4 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('keyup', handleGlobalKeyup);
