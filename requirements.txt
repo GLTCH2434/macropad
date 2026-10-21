@@ -1,0 +1,4 @@
+# DeskPad - Python requirements
+# Core: only stdlib used for minimal deps
+# Optional: install if you want extra features
+# pip install aiohttp  # for async HTTP server (stdlib http.server used by default)

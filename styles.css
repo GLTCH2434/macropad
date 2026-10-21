@@ -1,21 +1,16 @@
 /* =========================================================
-   Macropad Simulator - styles.css
-   Dark theme built on CSS custom properties (variables).
-   Change the colours in :root and the whole UI follows.
-
-   The page is designed for a LANDSCAPE tablet: it fills the
-   screen exactly (100dvh) and never scrolls. Sizes that depend
-   on screen height use vh units so everything scales together.
+   DeskPad - Styles
+   Dark theme macropad interface for Android tablet (landscape)
    ========================================================= */
 
 /* ---------- Theme variables ---------- */
 :root {
-  --bg: #0b0d12;                       /* page background */
-  --panel: rgba(255, 255, 255, 0.05);  /* translucent "glass" surfaces */
+  --bg: #0b0d12;
+  --panel: rgba(255, 255, 255, 0.05);
   --panel-border: rgba(255, 255, 255, 0.10);
   --text: #e8ebf3;
   --text-dim: #8a91a4;
-  --accent: #6c8cff;                   /* overridden per layer below */
+  --accent: #6c8cff;
   --accent-glow: rgba(108, 140, 255, 0.45);
   --danger: #ff5c7a;
   --ok: #38d9a9;
@@ -23,11 +18,10 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
   --inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 
-  /* Knob diameter: 26% of screen height, but never smaller than 64px or bigger than 140px */
-  --knob: clamp(64px, 26vh, 140px);
+  /* Dial diameter: 35% of screen height, clamped */
+  --knob: clamp(80px, 35vh, 180px);
 }
 
-/* Each layer gets its own accent colour; app.js sets <body data-layer="n"> */
 body[data-layer="0"] { --accent: #6c8cff; --accent-glow: rgba(108, 140, 255, 0.45); }
 body[data-layer="1"] { --accent: #38d9a9; --accent-glow: rgba(56, 217, 169, 0.45); }
 body[data-layer="2"] { --accent: #ffa94d; --accent-glow: rgba(255, 169, 77, 0.45); }
@@ -40,27 +34,24 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  height: 100dvh;                    /* dvh = the visible height, even with browser toolbars */
-  overflow: hidden;                  /* landscape pad never scrolls */
-  /* keep clear of notches / rounded corners */
-  padding:
-    max(8px, env(safe-area-inset-top))
-    max(8px, env(safe-area-inset-right))
-    max(8px, env(safe-area-inset-bottom))
-    max(8px, env(safe-area-inset-left));
+  height: 100dvh;
+  overflow: hidden;
+  padding: max(8px, env(safe-area-inset-top))
+           max(8px, env(safe-area-inset-right))
+           max(8px, env(safe-area-inset-bottom))
+           max(8px, env(safe-area-inset-left));
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* soft glow behind the pad that follows the layer's accent colour */
   background:
     radial-gradient(ellipse at 50% 20%, var(--accent-glow), transparent 55%),
     var(--bg);
   transition: background 0.4s ease;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;         /* no pull-to-refresh / rubber-banding */
+  overscroll-behavior: none;
 }
 
-/* ---------- The macropad body ---------- */
-.macropad {
+/* ---------- Main container ---------- */
+.deskpad {
   width: 100%;
   height: 100%;
   padding: 12px;
@@ -70,10 +61,8 @@ body {
   box-shadow: var(--shadow), var(--inset-highlight);
   backdrop-filter: blur(14px);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);   /* top bar, then everything else */
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-
-  /* Touch behaviour: no scrolling/zooming gestures, no text selection, no long-press menu */
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -88,7 +77,7 @@ body {
   gap: 8px;
 }
 .pad-title {
-  margin: 0 auto 0 0;               /* auto right margin pushes everything else to the right */
+  margin: 0 auto 0 0;
   font-size: 1rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -103,7 +92,34 @@ body {
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
-/* Device link pill: grey dot = disconnected, green dot = connected */
+/* Layer tabs */
+.layer-tabs {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+.layer-tab {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.layer-tab:hover { border-color: var(--accent); color: var(--accent); }
+.layer-tab.active {
+  background: var(--accent);
+  color: #0b0d12;
+  border-color: transparent;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Device pill */
 .device-pill {
   display: flex;
   align-items: center;
@@ -114,6 +130,7 @@ body {
   color: var(--text-dim);
   border: 1px solid var(--panel-border);
   background: var(--panel);
+  white-space: nowrap;
 }
 .device-dot {
   width: 8px;
@@ -142,10 +159,9 @@ body {
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: var(--accent); color: #0b0d12; border-color: transparent; font-weight: 600; }
-.btn-primary:hover { background: var(--accent); filter: brightness(1.1); }
+.btn-primary:hover { filter: brightness(1.1); }
 .btn-danger { color: var(--danger); }
 
-/* Fingers need bigger targets than mouse pointers */
 @media (pointer: coarse) {
   .btn { padding: 10px 16px; }
 }
@@ -156,17 +172,17 @@ body {
 }
 .icon-btn:hover { color: var(--text); }
 
-/* ---------- Main area: keys on the left half, side pane on the right half ---------- */
+/* ---------- Main body ---------- */
 .pad-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  min-height: 0;                    /* lets grid children shrink instead of overflowing */
+  min-height: 0;
 }
 
-/* LEFT: 12 keys, 3 columns x 4 rows, stretched to fill the whole half */
+/* LEFT: Macro keys 3x4 */
 .keys-pane { min-height: 0; min-width: 0; }
-.custom-keys {
+.macro-keys {
   height: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -174,15 +190,16 @@ body {
   gap: 10px;
 }
 
-/* RIGHT: layer keys at the top, dials anchored at the bottom; no activity log */
+/* RIGHT: Layer keys + dials */
 .side-pane {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   min-height: 0;
   min-width: 0;
 }
+.side-pane .layer-keys { flex-shrink: 0; }
+.side-pane .knobs { flex: 1; }
 
 .layer-keys {
   display: grid;
@@ -198,9 +215,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   min-height: 0;
-  padding: 6px;
+  padding: 8px;
   border-radius: var(--radius);
   border: 1px solid var(--panel-border);
   background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
@@ -211,7 +228,6 @@ body {
   transition: transform 0.06s ease, box-shadow 0.06s ease, border-color 0.2s ease, background 0.2s ease;
 }
 .key:hover { border-color: var(--accent); }
-/* "Pressed" look: key sinks down and glows */
 .key.pressed {
   transform: translateY(3px);
   box-shadow: 0 1px 0 rgba(0,0,0,0.5), 0 0 18px var(--accent-glow), var(--inset-highlight);
@@ -220,21 +236,19 @@ body {
 }
 .key-empty { opacity: 0.45; }
 
-/* Text scales with screen height so it stays readable on any tablet */
-.key-label { font-size: clamp(0.8rem, 2.8vh, 1.3rem); font-weight: 600; text-align: center; line-height: 1.1; }
-.key-sub   { font-size: clamp(0.6rem, 1.7vh, 0.85rem); color: var(--text-dim); text-align: center; }
-/* Tiny hint in the corner telling you which computer key triggers this one */
+.key-icon { font-size: clamp(1.2rem, 4vh, 1.8rem); line-height: 1; }
+.key-label { font-size: clamp(0.75rem, 2.5vh, 1.1rem); font-weight: 600; text-align: center; line-height: 1.1; }
+.key-sub { font-size: clamp(0.55rem, 1.5vh, 0.75rem); color: var(--text-dim); text-align: center; }
 .key-hint {
   position: absolute;
-  top: 4px;
-  right: 6px;
+  top: 4px; right: 6px;
   font-family: ui-monospace, monospace;
-  font-size: 0.55rem;
+  font-size: 0.5rem;
   color: var(--text-dim);
   opacity: 0.7;
 }
 
-/* Layer keys are short and wide; the one for the current layer is lit */
+/* Layer keys */
 .layer-keys .key { height: clamp(44px, 13vh, 76px); }
 .layer-keys .key.active-layer {
   border-color: var(--accent);
@@ -242,17 +256,19 @@ body {
 }
 .layer-keys .key.active-layer .key-label { color: var(--accent); }
 
-/* ---------- Knobs (bottom of the right half) ---------- */
+/* ---------- Dials (knobs) ---------- */
 .knobs {
   display: flex;
-  justify-content: space-around;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
 }
 .knob-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .knob-label {
   font-size: 0.75rem;
@@ -266,7 +282,7 @@ body {
   height: var(--knob);
   border-radius: 50%;
   cursor: grab;
-  touch-action: none;                /* stops the page scrolling while dragging on touch screens */
+  touch-action: none;
   background: radial-gradient(circle at 35% 30%, #3a3f4f, #14161d 70%);
   border: 1px solid var(--panel-border);
   box-shadow: var(--shadow), var(--inset-highlight), inset 0 -6px 12px rgba(0,0,0,0.5);
@@ -277,13 +293,11 @@ body {
 .knob-dial:focus-visible { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
 .knob-dial.rotating { cursor: grabbing; box-shadow: var(--shadow), inset 0 -6px 12px rgba(0,0,0,0.5), 0 0 24px var(--accent-glow); }
 
-/* The cap spins; --angle is set from JavaScript */
 .knob-cap {
   position: absolute;
   inset: 0;
   transform: rotate(var(--angle, 0deg));
 }
-/* The little notch showing where the knob is pointing */
 .knob-cap::before {
   content: "";
   position: absolute;
@@ -314,13 +328,12 @@ body {
   backdrop-filter: blur(4px);
   z-index: 10;
 }
-/* A [hidden] element must really be hidden even though we set display:flex above */
 .modal-backdrop[hidden] { display: none; }
 
 .modal {
   width: 100%;
-  max-width: 600px;
-  max-height: 94dvh;                /* leaves room on short landscape screens */
+  max-width: 700px;
+  max-height: 94dvh;
   display: flex;
   flex-direction: column;
   border-radius: 20px;
@@ -360,16 +373,17 @@ body {
   border-bottom: 1px solid var(--panel-border);
 }
 .cfg-row:last-child { border-bottom: none; }
-/* Simpler two-column rows used by the Layer Keys, Knobs and Device tabs */
 .cfg-row-simple { grid-template-columns: 1fr 1fr; }
-.cfg-row-simple .cfg-name { grid-column: 1 / -1; grid-row: auto; font-weight: 600; color: var(--text); font-size: 0.85rem; }
+.cfg-row-simple .cfg-name { grid-column: 1 / -1; font-weight: 600; color: var(--text); font-size: 0.85rem; }
 .cfg-row .cfg-name { font-size: 0.75rem; color: var(--text-dim); grid-row: span 2; }
 .cfg-row .cfg-wide { grid-column: 1 / -1; }
 .cfg-field { display: flex; flex-direction: column; gap: 3px; font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
-/* A checkbox with its label text next to it */
 .cfg-check { flex-direction: row; align-items: center; gap: 8px; font-size: 0.85rem; text-transform: none; letter-spacing: normal; color: var(--text); }
 .cfg-check input { width: auto; }
 .cfg-note { font-size: 0.8rem; color: var(--text-dim); line-height: 1.4; }
+.cfg-note code { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+.cfg-note ol { margin: 8px 0; padding-left: 20px; }
+.cfg-note li { margin: 4px 0; }
 
 .modal input, .modal select {
   width: 100%;
@@ -387,16 +401,15 @@ body {
 .modal input:disabled { opacity: 0.4; }
 .modal option { background: #151821; }
 
-/* ---------- Narrow windows (e.g. a phone, or a desktop window dragged thin) ---------- */
+/* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .pad-title { display: none; }
   .layer-indicator { margin-right: auto; }
 }
 
-/* ---------- Portrait fallback: stack the two halves and allow scrolling ---------- */
 @media (orientation: portrait) {
   body { height: auto; min-height: 100dvh; overflow: auto; }
-  .macropad { height: auto; touch-action: pan-y; }
+  .deskpad { height: auto; touch-action: pan-y; }
   .pad-body { grid-template-columns: 1fr; }
-  .custom-keys { height: auto; grid-auto-rows: 84px; grid-template-rows: none; }
+  .macro-keys { height: auto; grid-auto-rows: 84px; grid-template-rows: none; }
 }
