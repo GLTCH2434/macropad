@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Macropad</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="macropad">
+    <div class="macropad-header">
+      <h1>Macropad</h1>
+      <div class="layer-indicator">
+        <span id="current-layer">Layer 1</span>
+        <button id="layer-toggle" class="btn-layer-toggle">Layers</button>
+      </div>
+    </div>
+
+    <div class="macropad-body">
+      <div class="knobs-section">
+        <div class="knob-container">
+          <div class="knob" id="knob-1" data-knob="1">
+            <div class="knob-indicator"></div>
+            <div class="knob-label">Knob 1</div>
+            <div class="knob-value" id="knob1-value">0</div>
+          </div>
+        </div>
+        <div class="knob-container">
+          <div class="knob" id="knob-2" data-knob="2">
+            <div class="knob-indicator"></div>
+            <div class="knob-label">Knob 2</div>
+            <div class="knob-value" id="knob2-value">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="keys-section">
+        <div class="custom-keys" id="custom-keys">
+        </div>
+
+        <div class="layer-keys" id="layer-keys">
+        </div>
+      </div>
+    </div>
+
+    <div class="macropad-footer">
+      <button id="config-btn" class="btn-config">Configure</button>
+    </div>
+  </div>
+
+  <div id="config-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Key Configuration</h2>
+      <div class="config-tabs">
+        <button class="tab-btn active" data-tab="keys">Custom Keys</button>
+        <button class="tab-btn" data-tab="layers">Layer Keys</button>
+        <button class="tab-btn" data-tab="knobs">Knobs</button>
+      </div>
+      <div class="tab-content">
+        <div id="keys-tab" class="tab-panel active">
+          <div class="key-config-grid" id="key-config-grid"></div>
+        </div>
+        <div id="layers-tab" class="tab-panel">
+          <div class="layer-config-grid" id="layer-config-grid"></div>
+        </div>
+        <div id="knobs-tab" class="tab-panel">
+          <div class="knob-config-grid" id="knob-config-grid"></div>
+        </div>
+      </div>
+      <button id="close-config" class="btn-close">Close</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
