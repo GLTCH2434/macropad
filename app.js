@@ -2,6 +2,17 @@ const NUM_CUSTOM_KEYS = 12;
 const NUM_LAYERS = 4;
 const NUM_KNOBS = 2;
 
+const defaultKnob = (index) => ({
+  label: `Knob ${index + 1}`,
+  value: 0,
+  min: 0,
+  max: 100,
+  step: 1,
+  mode: 'relative',
+  action: 'none',
+  valueParam: ''
+});
+
 const state = {
   currentLayer: 0,
   customKeys: Array.from({ length: NUM_LAYERS }, () =>
@@ -16,16 +27,9 @@ const state = {
     label: `L${i + 1}`,
     targetLayer: i
   })),
-  knobs: Array.from({ length: NUM_KNOBS }, (_, i) => ({
-    label: `Knob ${i + 1}`,
-    value: 0,
-    min: 0,
-    max: 100,
-    step: 1,
-    mode: 'relative',
-    action: 'none',
-    valueParam: ''
-  })),
+  knobs: Array.from({ length: NUM_LAYERS }, () =>
+    Array.from({ length: NUM_KNOBS }, (_, i) => defaultKnob(i))
+  ),
   pressedKeys: new Set(),
   knobDrag: { active: false, knobIndex: null, startY: 0, startValue: 0 },
   keyCapture: { active: false, targetInput: null, targetKeyIndex: null, targetField: null }
@@ -84,14 +88,17 @@ function renderLayerKeys() {
 }
 
 function renderKnobs() {
-  state.knobs.forEach((knob, index) => {
+  const layerKnobs = state.knobs[state.currentLayer];
+  layerKnobs.forEach((knob, index) => {
     const knobEl = document.getElementById(`knob-${index + 1}`);
     const valueEl = document.getElementById(`knob${index + 1}-value`);
     const indicator = knobEl.querySelector('.knob-indicator');
+    const labelEl = knobEl.querySelector('.knob-label');
     
     const angle = mapValue(knob.value, knob.min, knob.max, -135, 135);
     indicator.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
     valueEl.textContent = knob.value;
+    labelEl.textContent = knob.label;
   });
 }
 
@@ -177,11 +184,12 @@ function switchLayer(layerIndex) {
   document.getElementById('current-layer').textContent = `Layer ${layerIndex + 1}`;
   renderCustomKeys();
   renderLayerKeys();
+  renderKnobs();
 }
 
 function startKnobDrag(e, knobIndex) {
   e.preventDefault();
-  const knob = state.knobs[knobIndex];
+  const knob = state.knobs[state.currentLayer][knobIndex];
   const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
   
   state.knobDrag = {
@@ -200,7 +208,7 @@ function handleKnobDrag(e) {
   e.preventDefault();
   const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
   const deltaY = state.knobDrag.startY - clientY;
-  const knob = state.knobs[state.knobDrag.knobIndex];
+  const knob = state.knobs[state.currentLayer][state.knobDrag.knobIndex];
   
   const sensitivity = 0.5;
   let newValue = state.knobDrag.startValue + deltaY * sensitivity;
@@ -251,8 +259,8 @@ function executeKeyAction(keyIndex) {
 }
 
 function executeKnobAction(knobIndex, value) {
-  const knob = state.knobs[knobIndex];
-  console.log(`Knob ${knobIndex + 1}: ${value}`, knob);
+  const knob = state.knobs[state.currentLayer][knobIndex];
+  console.log(`Knob ${knobIndex + 1} (Layer ${state.currentLayer + 1}): ${value}`, knob);
   
   switch (knob.action) {
     case 'volume':
@@ -383,10 +391,11 @@ function renderLayerConfig() {
 
 function renderKnobConfig() {
   const container = document.getElementById('knob-config-grid');
+  const layerKnobs = state.knobs[state.currentLayer];
   
-  container.innerHTML = state.knobs.map((knob, index) => `
+  container.innerHTML = layerKnobs.map((knob, index) => `
     <div class="config-item">
-      <label>Knob ${index + 1}</label>
+      <label>Knob ${index + 1} (Layer ${state.currentLayer + 1})</label>
       <div class="config-row">
         <input type="text" placeholder="Label" value="${escapeHtml(knob.label)}" data-knob-index="${index}" data-field="label">
         <select data-knob-index="${index}" data-field="mode">
@@ -432,9 +441,8 @@ function handleConfigChange(e) {
     if (field === 'label') renderLayerKeys();
   } else if (target.dataset.knobIndex !== undefined) {
     const index = parseInt(target.dataset.knobIndex);
-    state.knobs[index][field] = target.type === 'number' ? parseFloat(target.value) : target.value;
-    if (field === 'label') renderKnobs();
-    if (field === 'min' || field === 'max' || field === 'step') renderKnobs();
+    state.knobs[state.currentLayer][index][field] = target.type === 'number' ? parseFloat(target.value) : target.value;
+    if (field === 'label' || field === 'min' || field === 'max' || field === 'step') renderKnobs();
   }
 }
 
@@ -566,6 +574,15 @@ function loadState() {
     try {
       const parsed = JSON.parse(saved);
       Object.assign(state, parsed);
+      // Ensure knobs array has correct structure for all layers
+      while (state.knobs.length < NUM_LAYERS) {
+        state.knobs.push(Array.from({ length: NUM_KNOBS }, (_, i) => defaultKnob(i)));
+      }
+      state.knobs.forEach((layerKnobs, layerIndex) => {
+        while (layerKnobs.length < NUM_KNOBS) {
+          layerKnobs.push(defaultKnob(layerKnobs.length));
+        }
+      });
       renderCustomKeys();
       renderLayerKeys();
       renderKnobs();
