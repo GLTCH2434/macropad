@@ -20,6 +20,7 @@ import android.content.IntentFilter
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ParcelUuid
+import android.util.Log
 import java.util.UUID
 
 /**
@@ -64,6 +65,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     @Volatile private var advertising = false
     @Volatile private var bluetoothOn = adapter?.isEnabled == true
     @Volatile private var inputCharacteristic: BluetoothGattCharacteristic? = null
+    /** Furthest HID handshake step the host has reached (diagnostic). */
+    @Volatile private var hostStep = "none"
 
     private val workerThread = HandlerThread("deskpad-hid").apply { start() }
     val handler = Handler(workerThread.looper)
@@ -75,12 +78,16 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                 BluetoothProfile.STATE_CONNECTED -> {
                     device = dev
                     notificationsOn = false
+                    hostStep = "connected"
+                    Log.d("DeskPadHID", "host connected: ${dev.address} (status=$status)")
                     stopAdvertising()
                     pushStatus()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    Log.d("DeskPadHID", "host disconnected (step was: $hostStep)")
                     device = null
                     notificationsOn = false
+                    hostStep = "none"
                     // Re-arm the GATT server before re-advertising. On
                     // Android 11 the server frequently refuses the next
                     // connection (ECONNREFUSED) when we re-advertise right
@@ -116,11 +123,23 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             val full = chr.value ?: ByteArray(0)
             val value =
                 if (offset > 0 && offset < full.size) full.copyOfRange(offset, full.size) else full
+            when (chr.uuid) {
+                UUID_HID_INFO -> hostStep = "reading hid-info"
+                UUID_REPORT_MAP -> hostStep = "reading report-map"
+                UUID_INPUT_REPORT -> hostStep = hostStep // informational read
+                else -> {}
+            }
+            Log.d(
+                "DeskPadHID",
+                "read ${chr.uuid} offset=$offset len=${full.size} -> ${value.size} bytes"
+            )
             try {
                 gattServer?.sendResponse(dev, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // Host went away mid-request; the disconnect path recovers.
+                Log.w("DeskPadHID", "sendResponse failed: ${e.message}")
             }
+            pushStatus()
         }
 
         override fun onCharacteristicWriteRequest(
@@ -135,7 +154,11 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             if (chr.uuid == UUID_PROTOCOL_MODE) {
                 chr.value = value
                 device = dev
+                hostStep = "protocol-mode set"
+                Log.d("DeskPadHID", "protocol mode written: ${value.toList()}")
                 pushStatus()
+            } else {
+                Log.d("DeskPadHID", "write ${chr.uuid} len=${value.size}")
             }
             if (responseNeeded) {
                 gattServer?.sendResponse(dev, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
@@ -156,6 +179,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             if (descriptor.uuid == UUID_CCCD) {
                 notificationsOn = value.size >= 2 &&
                     ((value[0].toInt() and 0xFF) or (value[1].toInt() and 0xFF)) != 0
+                hostStep = if (notificationsOn) "subscribed" else "notify disabled"
+                Log.d("DeskPadHID", "CCCD write -> notificationsOn=$notificationsOn")
                 pushStatus()
             }
             if (responseNeeded) {
@@ -246,7 +271,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             else -> "bluetooth-off"
         }
         val name = (d?.name ?: DEVICE_NAME).replace("\\", "\\\\").replace("\"", "\\\"")
-        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready}"
+        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\"}"
     }
 
     fun isReady(): Boolean = device != null && notificationsOn
@@ -279,12 +304,17 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         val d = device
         val server = gattServer
         val chr = inputCharacteristic
-        if (d == null || server == null || chr == null || !notificationsOn) return
+        if (d == null || server == null || chr == null || !notificationsOn) {
+            Log.w("DeskPadHID", "send dropped (not ready): device=${d != null} notify=$notificationsOn step=$hostStep")
+            return
+        }
         handler.post {
             try {
                 server.notifyCharacteristicChanged(d, chr, false, report)
-            } catch (_: Exception) {
+                Log.d("DeskPadHID", "sent report: ${report.toList()}")
+            } catch (e: Exception) {
                 // Host went away mid-send; the disconnect callback recovers.
+                Log.w("DeskPadHID", "notify failed: ${e.message}")
             }
         }
     }

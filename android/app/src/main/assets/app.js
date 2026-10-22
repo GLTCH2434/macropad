@@ -879,7 +879,10 @@ function updateBtStatus(s) {
   } else if (s.state === 'connected' || s.state === 'advertising') {
     chip.classList.add('warn');
     text.textContent = s.state === 'connected'
-      ? 'Bluetooth: connecting…'
+      ? 'Bluetooth: host connected — ' +
+        (s.step && s.step !== 'connected' && s.step !== 'none'
+          ? s.step
+          : 'waiting for HID setup…')
       : 'Bluetooth: pair DeskPad with your computer';
   } else {
     chip.classList.add('err');

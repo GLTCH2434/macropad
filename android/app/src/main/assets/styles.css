@@ -413,6 +413,19 @@ body {
   .pad-body { grid-template-columns: 1fr; }
   .macro-keys { height: auto; grid-auto-rows: 84px; grid-template-rows: none; }
 }
+/* ---------- Build tag (which APK/web build is running) ---------- */
+.build-tag {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
 /* ---------- Bluetooth status (APK mode) ---------- */
 .bt-status {
   display: flex;
