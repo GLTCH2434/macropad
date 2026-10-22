@@ -254,15 +254,34 @@ def main() -> None:
     if not mac:
         from bleak import BleakScanner
 
+        # Filter by the HID service UUID: the pad's app GATT server
+        # advertises 0x1812, but the tablet's adapter-level discoverable
+        # advertisement (same name, no services) must not match.
         async def _find():
-            dev = await BleakScanner.find_device_by_name(args.name, timeout=12)
-            return dev.address if dev else None
+            found = {}
 
-        mac = asyncio.run(_find())
-        if not mac:
-            sys.exit(f"could not find '{args.name}' by BLE scan — is it advertising? "
-                     "Re-run with --mac AA:BB:CC:DD:EE:FF")
-        log(f"found {args.name} at {mac}")
+            def cb(dev, adv):
+                name = (adv.local_name or "").lower()
+                if args.name.lower() in name:
+                    found[dev.address] = dev
+
+            scanner = BleakScanner(with_services=["1812"], detection_callback=cb)
+            await scanner.start()
+            try:
+                await asyncio.sleep(12)
+            finally:
+                await scanner.stop()
+            return next(iter(found.values()), None)
+
+        dev = asyncio.run(_find())
+        if not dev:
+            sys.exit(
+                f"could not find '{args.name}' advertising the HID service — "
+                "is the DeskPad app open and its pill showing 'pair DeskPad…'?\n"
+                "Re-run with --mac AA:BB:CC:DD:EE:FF to force an address"
+            )
+        mac = dev.address
+        log(f"found {args.name} at {mac} (HID service advertised)")
 
     while True:
         try:

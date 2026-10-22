@@ -67,6 +67,9 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     @Volatile private var inputCharacteristic: BluetoothGattCharacteristic? = null
     /** Furthest HID handshake step the host has reached (diagnostic). */
     @Volatile private var hostStep = "none"
+    /** Last advertising failure code (null = healthy). Shown in the pill. */
+    @Volatile private var advError: Int? = null
+    @Volatile private var advRetries = 0
 
     private val workerThread = HandlerThread("deskpad-hid").apply { start() }
     val handler = Handler(workerThread.looper)
@@ -214,12 +217,28 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     private val advCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             advertising = true
+            advError = null
+            advRetries = 0
+            Log.d("DeskPadHID", "advertising up")
             pushStatus()
         }
 
         override fun onStartFailure(errorCode: Int) {
             advertising = false
+            advError = errorCode
+            Log.w("DeskPadHID", "advertising failed: code=$errorCode (retry #$advRetries)")
             pushStatus()
+            // Self-heal: one failure (stale advertiser state after an app
+            // restart / reinstall, link still tearing down, "too many
+            // advertisers") used to leave the pad idle forever. Keep
+            // trying with backoff until the advertiser is up.
+            if (bluetoothOn) {
+                val delay = (1000L * (advRetries + 1)).coerceAtMost(8000L)
+                handler.postDelayed({
+                    advRetries++
+                    startAdvertising()
+                }, delay)
+            }
         }
     }
 
@@ -277,7 +296,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             else -> "bluetooth-off"
         }
         val name = (d?.name ?: DEVICE_NAME).replace("\\", "\\\\").replace("\"", "\\\"")
-        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\"}"
+        val adv = advError?.toString() ?: "ok"
+        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\",\"adv\":\"$adv\"}"
     }
 
     fun isReady(): Boolean = device != null && notificationsOn

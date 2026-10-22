@@ -888,7 +888,9 @@ function updateBtStatus(s) {
     chip.classList.add('err');
     text.textContent = s.state === 'bluetooth-off'
       ? 'Bluetooth: off on tablet'
-      : 'Bluetooth: unavailable';
+      : s.state === 'idle'
+        ? `Bluetooth: not advertising (adv ${s.adv ?? '?'})`
+        : 'Bluetooth: unavailable';
   }
 }
 
