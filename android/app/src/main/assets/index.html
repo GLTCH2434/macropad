@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="description" content="DeskPad - Macropad control surface">
+  <title>DeskPad</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+</head>
+<body data-layer="0">
+  <main class="deskpad">
+    <header class="topbar">
+      <h1 class="pad-title">DeskPad</h1>
+      <div class="layer-indicator" id="layer-indicator" aria-live="polite">Layer 1</div>
+      <div class="layer-tabs" id="layer-tabs" role="tablist" aria-label="Layers"></div>
+      <div class="bt-status" id="bt-status" hidden><span class="bt-dot"></span><span class="bt-text" id="bt-status-text"></span></div>
+      <button type="button" class="btn" id="fullscreen-btn" hidden>Fullscreen</button>
+      <button type="button" class="btn btn-primary" id="configure-btn">Configure</button>
+    </header>
+
+    <section class="pad-body">
+      <section class="keys-pane" aria-label="Macro keys">
+        <div class="macro-keys" id="macro-keys"></div>
+      </section>
+      <section class="side-pane">
+        <div class="layer-keys" id="layer-keys" aria-label="Layer keys"></div>
+        <div class="knobs" id="knobs" aria-label="Dials"></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="config-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="config-title">
+      <div class="modal-header">
+        <h2 id="config-title">Configure</h2>
+        <button type="button" class="icon-btn" id="config-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" role="tab" data-tab="keys">Macro Keys</button>
+        <button type="button" class="tab" role="tab" data-tab="layers">Layer Keys</button>
+        <button type="button" class="tab" role="tab" data-tab="knobs">Dials</button>
+        <button type="button" class="tab" role="tab" data-tab="export">Export/Import</button>
+      </div>
+      <div class="modal-body" id="config-body"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" id="config-reset">Reset to defaults</button>
+        <button type="button" class="btn btn-primary" id="config-done">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(reg => console.log('[DeskPad] SW registered:', reg.scope))
+        .catch(err => console.log('[DeskPad] SW registration failed:', err));
+    }
+  </script>
+</body>
+</html>

@@ -413,3 +413,44 @@ body {
   .pad-body { grid-template-columns: 1fr; }
   .macro-keys { height: auto; grid-auto-rows: 84px; grid-template-rows: none; }
 }
+/* ---------- Bluetooth status (APK mode) ---------- */
+.bt-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.bt-dot { width: 8px; height: 8px; border-radius: 50%; background: #ffa94d; flex: none; }
+.bt-status.ok { color: var(--ok); }
+.bt-status.ok .bt-dot { background: var(--ok); box-shadow: 0 0 8px var(--accent-glow); }
+.bt-status.warn .bt-dot { background: #ffa94d; animation: bt-pulse 1.6s ease-in-out infinite; }
+.bt-status.err { color: var(--danger); }
+.bt-status.err .bt-dot { background: var(--danger); }
+@keyframes bt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ---------- Toast (native feedback) ---------- */
+#deskpad-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: #171b26;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+  z-index: 200;
+  max-width: 80vw;
+}
+#deskpad-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

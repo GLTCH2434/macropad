@@ -22,7 +22,7 @@ class MacroActions:
             "shell": apps,
         }
 
-        # Predefined macros
+# Predefined macros
         self.macros = {
             "duplicate_line": [
                 {"type": "shortcut", "params": {"combo": "Home"}},
@@ -42,7 +42,7 @@ class MacroActions:
                 {"type": "shortcut", "params": {"combo": "Ctrl+Shift+S"}},
             ],
             "copy_file_path": [
-                {"type": "shortcut", "params": {"combo": "Ctrl+L"}},  # Focus address bar in many file managers
+                {"type": "shortcut", "params": {"combo": "Ctrl+L"}},
                 {"type": "shortcut", "params": {"combo": "Ctrl+C"}},
             ],
             "new_terminal_tab": [
@@ -53,6 +53,17 @@ class MacroActions:
             ],
             "reopen_closed_tab": [
                 {"type": "shortcut", "params": {"combo": "Ctrl+Shift+T"}},
+            ],
+            "vim_space_s_a": [
+                {"type": "keypress", "params": {"key": " "}},
+                {"type": "wait", "params": {"ms": 50}},
+                {"type": "keypress", "params": {"key": "s"}},
+                {"type": "wait", "params": {"ms": 50}},
+                {"type": "keypress", "params": {"key": "a"}},
+            ],
+            "vim_wq": [
+                {"type": "text", "params": {"text": ":wq"}},
+                {"type": "keypress", "params": {"key": "Enter"}},
             ],
         }
 

@@ -1,6 +1,7 @@
 /* =========================================================
- * DeskPad - Pure PWA Frontend (no backend required)
- * Stores config in localStorage, optional API endpoint for actions
+ * DeskPad - PWA Frontend
+ * Stores config in localStorage; sends actions to the companion
+ * server (server.py) that serves this page
  * ========================================================= */
 'use strict';
 
@@ -12,9 +13,26 @@ const PX_PER_TICK = 6;
 const KNOB_MIN_ANGLE = -135;
 const KNOB_MAX_ANGLE = 135;
 
-// Optional: set this to your backend URL if you add one later
-// const API_BASE = 'http://127.0.0.1:8765/api';
-const API_BASE = null;
+// Companion server (server.py) that serves this page. Using the page's own
+// origin works both over adb reverse (http://127.0.0.1:8765) and over the
+// LAN IP (http://<pc-ip>:8765). Set to null for a standalone UI with no
+// host control.
+const API_BASE = location.protocol.startsWith('http')
+  ? location.origin + '/api'
+  : null;
+
+// Native Android shell (DeskPad APK). The app injects window.DeskPad and
+// emits actions directly as Bluetooth HID reports — no server involved.
+const NATIVE = typeof window !== 'undefined' && !!window.DeskPad;
+function nativeSend(method, payload) {
+  try {
+    window.DeskPad[method](JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    console.warn('[DeskPad] Native bridge call failed:', e);
+    return false;
+  }
+}
 
 const KEY_ACTION_TYPES = [
   { id: 'none', label: 'None', hint: '', fields: [] },
@@ -64,92 +82,96 @@ const ICONS = {
   play: '▶', prev: '⏮', next: '⏭', stop: '⏹', mute: '🔇',
   'vol-up': '🔊', 'vol-down': '🔉', fullscreen: '⛶', theater: '🎭',
   subtitles: '💬', 'speed-up': '⏩', 'speed-down': '⏪',
-  default: '🔘',
+  save: '💾', 'tab-new': '📑', 'window-switch': '🔄', lock: '🔒',
+  'window-new': '🪟', enter: '⏎', esc: '⎋', 'vim-top': '⇡', 'vim-bottom': '⇣',
+  'vim-wq': '💾⏎', exclaim: '!', dollar: '$', ampersand: '&',
+  rectangle: '▭', line: '━', 'send-back': '⇩', 'bring-forward': '⇧',
+  'tab-reopen': '↻', default: '🔘',
 };
 
 const DEFAULT_LAYERS = [
   {
-    name: 'General',
+    name: 'Text / General',
     keys: [
-      {label: 'Terminal', icon: 'terminal', hint: 'Ctrl+Alt+T', action: 'shortcut', params: {combo: 'Ctrl+Alt+T'}},
-      {label: 'Files', icon: 'files', hint: 'Super+E', action: 'shortcut', params: {combo: 'Super+E'}},
-      {label: 'Browser', icon: 'browser', hint: 'Super+B', action: 'shortcut', params: {combo: 'Super+B'}},
-      {label: 'Settings', icon: 'settings', hint: 'Super+.', action: 'shortcut', params: {combo: 'Super+.'}},
       {label: 'Copy', icon: 'copy', hint: 'Ctrl+C', action: 'shortcut', params: {combo: 'Ctrl+C'}},
       {label: 'Paste', icon: 'paste', hint: 'Ctrl+V', action: 'shortcut', params: {combo: 'Ctrl+V'}},
-      {label: 'Cut', icon: 'cut', hint: 'Ctrl+X', action: 'shortcut', params: {combo: 'Ctrl+X'}},
-      {label: 'Undo', icon: 'undo', hint: 'Ctrl+Z', action: 'shortcut', params: {combo: 'Ctrl+Z'}},
-      {label: 'Redo', icon: 'redo', hint: 'Ctrl+Shift+Z', action: 'shortcut', params: {combo: 'Ctrl+Shift+Z'}},
       {label: 'Select All', icon: 'select', hint: 'Ctrl+A', action: 'shortcut', params: {combo: 'Ctrl+A'}},
-      {label: 'Find', icon: 'search', hint: 'Ctrl+F', action: 'shortcut', params: {combo: 'Ctrl+F'}},
-      {label: 'Screenshot', icon: 'camera', hint: 'PrtSc', action: 'keypress', params: {key: 'PrintScreen'}}
-    ],
-    dials: [
-      {label: 'Volume', action: 'volume', value: 50, min: 0, max: 100, step: 2, mode: 'range', params: {}},
-      {label: 'Brightness', action: 'brightness', value: 50, min: 0, max: 100, step: 5, mode: 'range', params: {}}
-    ]
-  },
-  {
-    name: 'Coding',
-    keys: [
-      {label: 'VS Code', icon: 'code', hint: 'Super+C', action: 'app', params: {appId: 'code'}},
-      {label: 'Terminal', icon: 'terminal', hint: 'Ctrl+Alt+T', action: 'shortcut', params: {combo: 'Ctrl+Alt+T'}},
-      {label: 'Git Status', icon: 'git', hint: 'gs', action: 'shell', params: {cmdId: 'git_status'}},
-      {label: 'Git Add', icon: 'git-add', hint: 'ga', action: 'shell', params: {cmdId: 'git_add'}},
-      {label: 'Git Commit', icon: 'git-commit', hint: 'gc', action: 'shell', params: {cmdId: 'git_commit'}},
-      {label: 'Git Push', icon: 'git-push', hint: 'gp', action: 'shell', params: {cmdId: 'git_push'}},
-      {label: 'Git Pull', icon: 'git-pull', hint: 'gP', action: 'shell', params: {cmdId: 'git_pull'}},
-      {label: 'Build', icon: 'build', hint: 'Ctrl+Shift+B', action: 'shortcut', params: {combo: 'Ctrl+Shift+B'}},
-      {label: 'Run Tests', icon: 'test', hint: 'Ctrl+T', action: 'shortcut', params: {combo: 'Ctrl+T'}},
-      {label: 'Debug', icon: 'debug', hint: 'F5', action: 'keypress', params: {key: 'F5'}},
-      {label: 'Format', icon: 'format', hint: 'Shift+Alt+F', action: 'shortcut', params: {combo: 'Shift+Alt+F'}},
-      {label: 'Terminal', icon: 'terminal', hint: 'Ctrl+`', action: 'shortcut', params: {combo: 'Ctrl+`'}}
-    ],
-    dials: [
-      {label: 'Volume', action: 'volume', value: 50, min: 0, max: 100, step: 2, mode: 'range', params: {}},
-      {label: 'Scroll', action: 'scroll', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {direction: 'vertical'}}
-    ]
-  },
-  {
-    name: 'Design',
-    keys: [
-      {label: 'Canva', icon: 'canva', hint: 'Super+C', action: 'app', params: {appId: 'canva'}},
-      {label: 'Figma', icon: 'figma', hint: 'Super+F', action: 'app', params: {appId: 'figma'}},
-      {label: 'Gimp', icon: 'gimp', hint: 'Super+G', action: 'app', params: {appId: 'gimp'}},
-      {label: 'Inkscape', icon: 'inkscape', hint: 'Super+I', action: 'app', params: {appId: 'inkscape'}},
       {label: 'Undo', icon: 'undo', hint: 'Ctrl+Z', action: 'shortcut', params: {combo: 'Ctrl+Z'}},
-      {label: 'Redo', icon: 'redo', hint: 'Ctrl+Shift+Z', action: 'shortcut', params: {combo: 'Ctrl+Shift+Z'}},
-      {label: 'Copy', icon: 'copy', hint: 'Ctrl+C', action: 'shortcut', params: {combo: 'Ctrl+C'}},
-      {label: 'Paste', icon: 'paste', hint: 'Ctrl+V', action: 'shortcut', params: {combo: 'Ctrl+V'}},
-      {label: 'Duplicate', icon: 'duplicate', hint: 'Ctrl+D', action: 'shortcut', params: {combo: 'Ctrl+D'}},
-      {label: 'Group', icon: 'group', hint: 'Ctrl+G', action: 'shortcut', params: {combo: 'Ctrl+G'}},
-      {label: 'Ungroup', icon: 'ungroup', hint: 'Ctrl+Shift+G', action: 'shortcut', params: {combo: 'Ctrl+Shift+G'}},
-      {label: 'Zoom Fit', icon: 'zoom-fit', hint: 'Shift+1', action: 'shortcut', params: {combo: 'Shift+1'}}
+      {label: 'Save', icon: 'save', hint: 'Ctrl+S', action: 'shortcut', params: {combo: 'Ctrl+S'}},
+      {label: 'New Tab', icon: 'tab-new', hint: 'Ctrl+T', action: 'shortcut', params: {combo: 'Ctrl+T'}},
+      {label: 'Switch Win', icon: 'window-switch', hint: 'Alt+Tab', action: 'shortcut', params: {combo: 'Alt+Tab'}},
+      {label: 'Lock', icon: 'lock', hint: 'Win+L', action: 'shortcut', params: {combo: 'Super+L'}},
+      {label: 'Terminal', icon: 'terminal', hint: 'Ctrl+Alt+T', action: 'shortcut', params: {combo: 'Ctrl+Alt+T'}},
+      {label: 'New Window', icon: 'window-new', hint: 'Ctrl+Shift+N', action: 'shortcut', params: {combo: 'Ctrl+Shift+N'}},
+      {label: 'Enter', icon: 'enter', hint: 'Enter', action: 'keypress', params: {key: 'Enter'}},
+      {label: 'Esc', icon: 'esc', hint: 'Esc', action: 'keypress', params: {key: 'Escape'}}
     ],
     dials: [
-      {label: 'Zoom', action: 'zoom', value: 100, min: 25, max: 400, step: 5, mode: 'range', params: {}},
-      {label: 'Scroll H', action: 'scroll', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {direction: 'horizontal'}}
+      {label: 'Scroll V', action: 'scroll', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {direction: 'vertical'}},
+      {label: 'Volume', action: 'volume', value: 50, min: 0, max: 100, step: 2, mode: 'range', params: {}}
     ]
   },
   {
     name: 'Media',
     keys: [
-      {label: 'Play/Pause', icon: 'play', hint: 'Space', action: 'media', params: {action: 'play'}},
-      {label: 'Previous', icon: 'prev', hint: '←', action: 'media', params: {action: 'previous'}},
-      {label: 'Next', icon: 'next', hint: '→', action: 'media', params: {action: 'next'}},
-      {label: 'Stop', icon: 'stop', hint: 'S', action: 'media', params: {action: 'stop'}},
-      {label: 'Mute', icon: 'mute', hint: 'M', action: 'media', params: {action: 'mute'}},
       {label: 'Vol Up', icon: 'vol-up', hint: '↑', action: 'media', params: {action: 'volume_up'}},
+      {label: 'Mute', icon: 'mute', hint: 'M', action: 'media', params: {action: 'mute'}},
       {label: 'Vol Down', icon: 'vol-down', hint: '↓', action: 'media', params: {action: 'volume_down'}},
-      {label: 'Fullscreen', icon: 'fullscreen', hint: 'F', action: 'keypress', params: {key: 'f'}},
-      {label: 'Theater', icon: 'theater', hint: 'T', action: 'keypress', params: {key: 't'}},
-      {label: 'Subtitles', icon: 'subtitles', hint: 'C', action: 'keypress', params: {key: 'c'}},
-      {label: 'Speed +', icon: 'speed-up', hint: '>', action: 'keypress', params: {key: '>'}},
-      {label: 'Speed -', icon: 'speed-down', hint: '<', action: 'keypress', params: {key: '<'}}
+      {label: 'Previous', icon: 'prev', hint: '←', action: 'media', params: {action: 'previous'}},
+      {label: 'Play/Pause', icon: 'play', hint: 'Space', action: 'media', params: {action: 'play'}},
+      {label: 'Next', icon: 'next', hint: '→', action: 'media', params: {action: 'next'}},
+      {label: 'Switch Win', icon: 'window-switch', hint: 'Alt+Tab', action: 'shortcut', params: {combo: 'Alt+Tab'}},
+      {label: 'Fullscreen', icon: 'fullscreen', hint: 'F11', action: 'keypress', params: {key: 'F11'}},
+      {label: 'Minimize', icon: 'minimize', hint: 'Win+Down', action: 'shortcut', params: {combo: 'Super+Down'}},
+      {label: 'Unassigned', icon: 'default', hint: '', action: 'none', params: {}},
+      {label: 'Enter', icon: 'enter', hint: 'Enter', action: 'keypress', params: {key: 'Enter'}},
+      {label: 'Esc', icon: 'esc', hint: 'Esc', action: 'keypress', params: {key: 'Escape'}}
     ],
     dials: [
       {label: 'Volume', action: 'volume', value: 50, min: 0, max: 100, step: 2, mode: 'range', params: {}},
       {label: 'Seek', action: 'custom', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {command: 'seek'}}
+    ]
+  },
+  {
+    name: 'Coding / Vim',
+    keys: [
+      {label: 'Copy', icon: 'copy', hint: 'Ctrl+C', action: 'shortcut', params: {combo: 'Ctrl+C'}},
+      {label: 'Paste', icon: 'paste', hint: 'Ctrl+V', action: 'shortcut', params: {combo: 'Ctrl+V'}},
+      {label: 'Space+S+A', icon: 'macro', hint: 'SPC S A', action: 'macro', params: {macroId: 'vim_space_s_a'}},
+      {label: 'First Line', icon: 'vim-top', hint: 'gg', action: 'keypress', params: {key: 'g'}},
+      {label: 'Last Line', icon: 'vim-bottom', hint: 'G', action: 'keypress', params: {key: 'G'}},
+      {label: 'Save & Quit', icon: 'vim-wq', hint: ':wq⏎', action: 'macro', params: {macroId: 'vim_wq'}},
+      {label: 'Switch Win', icon: 'window-switch', hint: 'Alt+Tab', action: 'shortcut', params: {combo: 'Alt+Tab'}},
+      {label: '!', icon: 'exclaim', hint: '!', action: 'keypress', params: {key: '!'}},
+      {label: '$', icon: 'dollar', hint: '$', action: 'keypress', params: {key: '$'}},
+      {label: '&', icon: 'ampersand', hint: '&', action: 'keypress', params: {key: '&'}},
+      {label: 'Enter', icon: 'enter', hint: 'Enter', action: 'keypress', params: {key: 'Enter'}},
+      {label: 'Esc', icon: 'esc', hint: 'Esc', action: 'keypress', params: {key: 'Escape'}}
+    ],
+    dials: [
+      {label: 'Scroll V', action: 'scroll', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {direction: 'vertical'}},
+      {label: 'Cursor H', action: 'scroll', value: 0, min: -100, max: 100, step: 1, mode: 'endless', params: {direction: 'horizontal'}}
+    ]
+  },
+  {
+    name: 'Canva',
+    keys: [
+      {label: 'Copy', icon: 'copy', hint: 'Ctrl+C', action: 'shortcut', params: {combo: 'Ctrl+C'}},
+      {label: 'Paste', icon: 'paste', hint: 'Ctrl+V', action: 'shortcut', params: {combo: 'Ctrl+V'}},
+      {label: 'Select All', icon: 'select', hint: 'Ctrl+A', action: 'shortcut', params: {combo: 'Ctrl+A'}},
+      {label: 'Undo', icon: 'undo', hint: 'Ctrl+Z', action: 'shortcut', params: {combo: 'Ctrl+Z'}},
+      {label: 'Rectangle', icon: 'rectangle', hint: 'R', action: 'keypress', params: {key: 'r'}},
+      {label: 'Line', icon: 'line', hint: 'L', action: 'keypress', params: {key: 'l'}},
+      {label: 'Switch Win', icon: 'window-switch', hint: 'Alt+Tab', action: 'shortcut', params: {combo: 'Alt+Tab'}},
+      {label: 'Send Back', icon: 'send-back', hint: 'Ctrl+[', action: 'shortcut', params: {combo: 'Ctrl+['}},
+      {label: 'Bring Fwd', icon: 'bring-forward', hint: 'Ctrl+]', action: 'shortcut', params: {combo: 'Ctrl+]'}},
+      {label: 'Reopen Tab', icon: 'tab-reopen', hint: 'Ctrl+Shift+T', action: 'shortcut', params: {combo: 'Ctrl+Shift+T'}},
+      {label: 'Enter', icon: 'enter', hint: 'Enter', action: 'keypress', params: {key: 'Enter'}},
+      {label: 'Esc', icon: 'esc', hint: 'Esc', action: 'keypress', params: {key: 'Escape'}}
+    ],
+    dials: [
+      {label: 'Zoom', action: 'zoom', value: 100, min: 25, max: 400, step: 5, mode: 'range', params: {}},
+      {label: 'Rotate', action: 'custom', value: 0, min: -180, max: 180, step: 1, mode: 'endless', params: {command: 'rotate'}}
     ]
   }
 ];
@@ -177,7 +199,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const tidy = (n) => Math.round(n * 10000) / 10000;
-const esc = (v) => String(v).replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c]));
+const esc = (v) => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const getIcon = (name) => ICONS[name] || ICONS.default;
 
 /* ===== STORAGE ===== */
@@ -382,16 +404,23 @@ async function executeKeyAction(key) {
   // Visual feedback
   console.log('[DeskPad] Action:', action, params);
 
-  // If API_BASE is set, send to backend
+  // Native shell: emit as Bluetooth HID reports (APK mode)
+  if (NATIVE) {
+    if (nativeSend('action', {type: action, params, layer: state.currentLayer})) return;
+  }
+
+  // Companion server (PWA mode)
   if (API_BASE) {
     try {
-      await fetch(API_BASE + '/action', {
+      const res = await fetch(API_BASE + '/action', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({type: action, params, layer: state.currentLayer})
       });
+      const body = await res.json().catch(() => null);
+      if (body?.error) console.warn('[DeskPad] Server error:', body.error);
     } catch (e) {
-      console.warn('[DeskPad] API call failed:', e);
+      console.warn('[DeskPad] API call failed (is server.py running? adb reverse set up?):', e);
     }
   }
 }
@@ -451,18 +480,27 @@ async function changeKnob(index, ticks) {
 
   console.log('[DeskPad] Dial', index, ':', dial.action, 'delta', ticks * step, 'value', next);
 
+  const dialPayload = {
+    dialIndex: index, type: dial.action, delta: ticks * step,
+    value: next, params: dial.params, layer: state.currentLayer
+  };
+
+  // Native shell: emit as Bluetooth HID reports (APK mode)
+  if (NATIVE) {
+    if (nativeSend('dial', dialPayload)) return;
+  }
+
   if (API_BASE) {
     try {
-      await fetch(API_BASE + '/dial', {
+      const res = await fetch(API_BASE + '/dial', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          dialIndex: index, type: dial.action, delta: ticks * step,
-          value: next, params: dial.params, layer: state.currentLayer
-        })
+        body: JSON.stringify(dialPayload)
       });
+      const body = await res.json().catch(() => null);
+      if (body?.error) console.warn('[DeskPad] Server error:', body.error);
     } catch (e) {
-      console.warn('[DeskPad] Dial API call failed:', e);
+      console.warn('[DeskPad] Dial API call failed (is server.py running? adb reverse set up?):', e);
     }
   }
 }
@@ -825,6 +863,55 @@ function init() {
       }
     }
   });
+}
+
+/* ===== NATIVE (APK / BLUETOOTH) MODE ===== */
+function updateBtStatus(s) {
+  const chip = $('#bt-status');
+  if (!chip) return;
+  chip.hidden = !NATIVE;
+  if (!NATIVE) return;
+  const text = $('#bt-status-text');
+  chip.classList.remove('ok', 'warn', 'err');
+  if (s.state === 'ready') {
+    chip.classList.add('ok');
+    text.textContent = 'Bluetooth: connected';
+  } else if (s.state === 'connected' || s.state === 'advertising') {
+    chip.classList.add('warn');
+    text.textContent = s.state === 'connected'
+      ? 'Bluetooth: connecting…'
+      : 'Bluetooth: pair DeskPad with your computer';
+  } else {
+    chip.classList.add('err');
+    text.textContent = s.state === 'bluetooth-off'
+      ? 'Bluetooth: off on tablet'
+      : 'Bluetooth: unavailable';
+  }
+}
+
+function showToast(msg) {
+  let el = document.getElementById('deskpad-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'deskpad-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = String(msg);
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+if (NATIVE) {
+  // The native shell calls these (defined here so page JS owns the UX;
+  // the Java bridge only carries the payloads).
+  window.DeskPad.onStatus = (json) => {
+    try { updateBtStatus(JSON.parse(json)); } catch (e) { console.warn('[DeskPad] bad status:', e); }
+  };
+  window.DeskPad.toast = (msg) => showToast(msg);
+  try { updateBtStatus(JSON.parse(window.DeskPad.status())); } catch (e) {}
+} else {
+  updateBtStatus({state: 'off'});
 }
 
 init();

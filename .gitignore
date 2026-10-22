@@ -28,3 +28,11 @@ Thumbs.db
 # Build artifacts
 *.log
 *.tmp
+
+# Android build output (the distributable APK lives in dist/)
+android/.gradle/
+android/app/build/
+android/build/
+
+# Release signing key — never commit
+android/keystore/

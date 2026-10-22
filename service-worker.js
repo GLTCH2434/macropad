@@ -6,7 +6,9 @@
  * loading and surviving brief network interruptions.
  */
 
-const CACHE_NAME = 'deskpad-v1';
+// Bump the version whenever app assets change so installed PWAs
+// drop their stale cache on activate.
+const CACHE_NAME = 'deskpad-v2';
 const ASSETS = [
   '/index.html',
   '/app.js',

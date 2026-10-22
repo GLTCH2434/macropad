@@ -2,87 +2,87 @@
   "version": 1,
   "layers": [
     {
-      "name": "General",
+      "name": "Text / General",
       "keys": [
-        {"label": "Terminal", "icon": "terminal", "hint": "Ctrl+Alt+T", "action": "shortcut", "params": {"combo": "Ctrl+Alt+T"}},
-        {"label": "Files", "icon": "files", "hint": "Super+E", "action": "shortcut", "params": {"combo": "Super+E"}},
-        {"label": "Browser", "icon": "browser", "hint": "Super+B", "action": "shortcut", "params": {"combo": "Super+B"}},
-        {"label": "Settings", "icon": "settings", "hint": "Super+.", "action": "shortcut", "params": {"combo": "Super+."}},
         {"label": "Copy", "icon": "copy", "hint": "Ctrl+C", "action": "shortcut", "params": {"combo": "Ctrl+C"}},
         {"label": "Paste", "icon": "paste", "hint": "Ctrl+V", "action": "shortcut", "params": {"combo": "Ctrl+V"}},
-        {"label": "Cut", "icon": "cut", "hint": "Ctrl+X", "action": "shortcut", "params": {"combo": "Ctrl+X"}},
-        {"label": "Undo", "icon": "undo", "hint": "Ctrl+Z", "action": "shortcut", "params": {"combo": "Ctrl+Z"}},
-        {"label": "Redo", "icon": "redo", "hint": "Ctrl+Shift+Z", "action": "shortcut", "params": {"combo": "Ctrl+Shift+Z"}},
         {"label": "Select All", "icon": "select", "hint": "Ctrl+A", "action": "shortcut", "params": {"combo": "Ctrl+A"}},
-        {"label": "Find", "icon": "search", "hint": "Ctrl+F", "action": "shortcut", "params": {"combo": "Ctrl+F"}},
-        {"label": "Screenshot", "icon": "camera", "hint": "PrtSc", "action": "keypress", "params": {"key": "PrintScreen"}}
-      ],
-      "dials": [
-        {"label": "Volume", "action": "volume", "value": 50, "min": 0, "max": 100, "step": 2, "mode": "range", "params": {}},
-        {"label": "Brightness", "action": "brightness", "value": 50, "min": 0, "max": 100, "step": 5, "mode": "range", "params": {}}
-      ]
-    },
-    {
-      "name": "Coding",
-      "keys": [
-        {"label": "VS Code", "icon": "code", "hint": "Super+C", "action": "app", "params": {"appId": "code"}},
-        {"label": "Terminal", "icon": "terminal", "hint": "Ctrl+Alt+T", "action": "shortcut", "params": {"combo": "Ctrl+Alt+T"}},
-        {"label": "Git Status", "icon": "git", "hint": "gs", "action": "shell", "params": {"cmdId": "git_status"}},
-        {"label": "Git Add", "icon": "git-add", "hint": "ga", "action": "shell", "params": {"cmdId": "git_add"}},
-        {"label": "Git Commit", "icon": "git-commit", "hint": "gc", "action": "shell", "params": {"cmdId": "git_commit"}},
-        {"label": "Git Push", "icon": "git-push", "hint": "gp", "action": "shell", "params": {"cmdId": "git_push"}},
-        {"label": "Git Pull", "icon": "git-pull", "hint": "gP", "action": "shell", "params": {"cmdId": "git_pull"}},
-        {"label": "Build", "icon": "build", "hint": "Ctrl+Shift+B", "action": "shortcut", "params": {"combo": "Ctrl+Shift+B"}},
-        {"label": "Run Tests", "icon": "test", "hint": "Ctrl+T", "action": "shortcut", "params": {"combo": "Ctrl+T"}},
-        {"label": "Debug", "icon": "debug", "hint": "F5", "action": "keypress", "params": {"key": "F5"}},
-        {"label": "Format", "icon": "format", "hint": "Shift+Alt+F", "action": "shortcut", "params": {"combo": "Shift+Alt+F"}},
-        {"label": "Terminal", "icon": "terminal", "hint": "Ctrl+`", "action": "shortcut", "params": {"combo": "Ctrl+`"}}
-      ],
-      "dials": [
-        {"label": "Volume", "action": "volume", "value": 50, "min": 0, "max": 100, "step": 2, "mode": "range", "params": {}},
-        {"label": "Scroll", "action": "scroll", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"direction": "vertical"}}
-      ]
-    },
-    {
-      "name": "Design",
-      "keys": [
-        {"label": "Canva", "icon": "canva", "hint": "Super+C", "action": "app", "params": {"appId": "canva"}},
-        {"label": "Figma", "icon": "figma", "hint": "Super+F", "action": "app", "params": {"appId": "figma"}},
-        {"label": "Gimp", "icon": "gimp", "hint": "Super+G", "action": "app", "params": {"appId": "gimp"}},
-        {"label": "Inkscape", "icon": "inkscape", "hint": "Super+I", "action": "app", "params": {"appId": "inkscape"}},
         {"label": "Undo", "icon": "undo", "hint": "Ctrl+Z", "action": "shortcut", "params": {"combo": "Ctrl+Z"}},
-        {"label": "Redo", "icon": "redo", "hint": "Ctrl+Shift+Z", "action": "shortcut", "params": {"combo": "Ctrl+Shift+Z"}},
-        {"label": "Copy", "icon": "copy", "hint": "Ctrl+C", "action": "shortcut", "params": {"combo": "Ctrl+C"}},
-        {"label": "Paste", "icon": "paste", "hint": "Ctrl+V", "action": "shortcut", "params": {"combo": "Ctrl+V"}},
-        {"label": "Duplicate", "icon": "duplicate", "hint": "Ctrl+D", "action": "shortcut", "params": {"combo": "Ctrl+D"}},
-        {"label": "Group", "icon": "group", "hint": "Ctrl+G", "action": "shortcut", "params": {"combo": "Ctrl+G"}},
-        {"label": "Ungroup", "icon": "ungroup", "hint": "Ctrl+Shift+G", "action": "shortcut", "params": {"combo": "Ctrl+Shift+G"}},
-        {"label": "Zoom Fit", "icon": "zoom-fit", "hint": "Shift+1", "action": "shortcut", "params": {"combo": "Shift+1"}}
+        {"label": "Save", "icon": "save", "hint": "Ctrl+S", "action": "shortcut", "params": {"combo": "Ctrl+S"}},
+        {"label": "New Tab", "icon": "tab-new", "hint": "Ctrl+T", "action": "shortcut", "params": {"combo": "Ctrl+T"}},
+        {"label": "Switch Win", "icon": "window-switch", "hint": "Alt+Tab", "action": "shortcut", "params": {"combo": "Alt+Tab"}},
+        {"label": "Lock", "icon": "lock", "hint": "Win+L", "action": "shortcut", "params": {"combo": "Super+L"}},
+        {"label": "Terminal", "icon": "terminal", "hint": "Ctrl+Alt+T", "action": "shortcut", "params": {"combo": "Ctrl+Alt+T"}},
+        {"label": "New Window", "icon": "window-new", "hint": "Ctrl+Shift+N", "action": "shortcut", "params": {"combo": "Ctrl+Shift+N"}},
+        {"label": "Enter", "icon": "enter", "hint": "Enter", "action": "keypress", "params": {"key": "Enter"}},
+        {"label": "Esc", "icon": "esc", "hint": "Esc", "action": "keypress", "params": {"key": "Escape"}}
       ],
       "dials": [
-        {"label": "Zoom", "action": "zoom", "value": 100, "min": 25, "max": 400, "step": 5, "mode": "range", "params": {}},
-        {"label": "Scroll H", "action": "scroll", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"direction": "horizontal"}}
+        {"label": "Scroll V", "action": "scroll", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"direction": "vertical"}},
+        {"label": "Volume", "action": "volume", "value": 50, "min": 0, "max": 100, "step": 2, "mode": "range", "params": {}}
       ]
     },
     {
       "name": "Media",
       "keys": [
-        {"label": "Play/Pause", "icon": "play", "hint": "Space", "action": "media", "params": {"action": "play"}},
-        {"label": "Previous", "icon": "prev", "hint": "←", "action": "media", "params": {"action": "previous"}},
-        {"label": "Next", "icon": "next", "hint": "→", "action": "media", "params": {"action": "next"}},
-        {"label": "Stop", "icon": "stop", "hint": "S", "action": "media", "params": {"action": "stop"}},
-        {"label": "Mute", "icon": "mute", "hint": "M", "action": "media", "params": {"action": "mute"}},
         {"label": "Vol Up", "icon": "vol-up", "hint": "↑", "action": "media", "params": {"action": "volume_up"}},
+        {"label": "Mute", "icon": "mute", "hint": "M", "action": "media", "params": {"action": "mute"}},
         {"label": "Vol Down", "icon": "vol-down", "hint": "↓", "action": "media", "params": {"action": "volume_down"}},
-        {"label": "Fullscreen", "icon": "fullscreen", "hint": "F", "action": "keypress", "params": {"key": "f"}},
-        {"label": "Theater", "icon": "theater", "hint": "T", "action": "keypress", "params": {"key": "t"}},
-        {"label": "Subtitles", "icon": "subtitles", "hint": "C", "action": "keypress", "params": {"key": "c"}},
-        {"label": "Speed +", "icon": "speed-up", "hint": ">", "action": "keypress", "params": {"key": ">"}},
-        {"label": "Speed -", "icon": "speed-down", "hint": "<", "action": "keypress", "params": {"key": "<"}}
+        {"label": "Previous", "icon": "prev", "hint": "←", "action": "media", "params": {"action": "previous"}},
+        {"label": "Play/Pause", "icon": "play", "hint": "Space", "action": "media", "params": {"action": "play"}},
+        {"label": "Next", "icon": "next", "hint": "→", "action": "media", "params": {"action": "next"}},
+        {"label": "Switch Win", "icon": "window-switch", "hint": "Alt+Tab", "action": "shortcut", "params": {"combo": "Alt+Tab"}},
+        {"label": "Fullscreen", "icon": "fullscreen", "hint": "F11", "action": "keypress", "params": {"key": "F11"}},
+        {"label": "Minimize", "icon": "minimize", "hint": "Win+Down", "action": "shortcut", "params": {"combo": "Super+Down"}},
+        {"label": "Unassigned", "icon": "default", "hint": "", "action": "none", "params": {}},
+        {"label": "Enter", "icon": "enter", "hint": "Enter", "action": "keypress", "params": {"key": "Enter"}},
+        {"label": "Esc", "icon": "esc", "hint": "Esc", "action": "keypress", "params": {"key": "Escape"}}
       ],
       "dials": [
         {"label": "Volume", "action": "volume", "value": 50, "min": 0, "max": 100, "step": 2, "mode": "range", "params": {}},
         {"label": "Seek", "action": "custom", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"command": "seek"}}
+      ]
+    },
+    {
+      "name": "Coding / Vim",
+      "keys": [
+        {"label": "Copy", "icon": "copy", "hint": "Ctrl+C", "action": "shortcut", "params": {"combo": "Ctrl+C"}},
+        {"label": "Paste", "icon": "paste", "hint": "Ctrl+V", "action": "shortcut", "params": {"combo": "Ctrl+V"}},
+        {"label": "Space+S+A", "icon": "macro", "hint": "SPC S A", "action": "macro", "params": {"macroId": "vim_space_s_a"}},
+        {"label": "First Line", "icon": "vim-top", "hint": "gg", "action": "keypress", "params": {"key": "g"}},
+        {"label": "Last Line", "icon": "vim-bottom", "hint": "G", "action": "keypress", "params": {"key": "G"}},
+        {"label": "Save & Quit", "icon": "vim-wq", "hint": ":wq⏎", "action": "macro", "params": {"macroId": "vim_wq"}},
+        {"label": "Switch Win", "icon": "window-switch", "hint": "Alt+Tab", "action": "shortcut", "params": {"combo": "Alt+Tab"}},
+        {"label": "!", "icon": "exclaim", "hint": "!", "action": "keypress", "params": {"key": "!"}},
+        {"label": "$", "icon": "dollar", "hint": "$", "action": "keypress", "params": {"key": "$"}},
+        {"label": "&", "icon": "ampersand", "hint": "&", "action": "keypress", "params": {"key": "&"}},
+        {"label": "Enter", "icon": "enter", "hint": "Enter", "action": "keypress", "params": {"key": "Enter"}},
+        {"label": "Esc", "icon": "esc", "hint": "Esc", "action": "keypress", "params": {"key": "Escape"}}
+      ],
+      "dials": [
+        {"label": "Scroll V", "action": "scroll", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"direction": "vertical"}},
+        {"label": "Cursor H", "action": "scroll", "value": 0, "min": -100, "max": 100, "step": 1, "mode": "endless", "params": {"direction": "horizontal"}}
+      ]
+    },
+    {
+      "name": "Canva",
+      "keys": [
+        {"label": "Copy", "icon": "copy", "hint": "Ctrl+C", "action": "shortcut", "params": {"combo": "Ctrl+C"}},
+        {"label": "Paste", "icon": "paste", "hint": "Ctrl+V", "action": "shortcut", "params": {"combo": "Ctrl+V"}},
+        {"label": "Select All", "icon": "select", "hint": "Ctrl+A", "action": "shortcut", "params": {"combo": "Ctrl+A"}},
+        {"label": "Undo", "icon": "undo", "hint": "Ctrl+Z", "action": "shortcut", "params": {"combo": "Ctrl+Z"}},
+        {"label": "Rectangle", "icon": "rectangle", "hint": "R", "action": "keypress", "params": {"key": "r"}},
+        {"label": "Line", "icon": "line", "hint": "L", "action": "keypress", "params": {"key": "l"}},
+        {"label": "Switch Win", "icon": "window-switch", "hint": "Alt+Tab", "action": "shortcut", "params": {"combo": "Alt+Tab"}},
+        {"label": "Send Back", "icon": "send-back", "hint": "Ctrl+[", "action": "shortcut", "params": {"combo": "Ctrl+["}},
+        {"label": "Bring Fwd", "icon": "bring-forward", "hint": "Ctrl+]", "action": "shortcut", "params": {"combo": "Ctrl+]"}},
+        {"label": "Reopen Tab", "icon": "tab-reopen", "hint": "Ctrl+Shift+T", "action": "shortcut", "params": {"combo": "Ctrl+Shift+T"}},
+        {"label": "Enter", "icon": "enter", "hint": "Enter", "action": "keypress", "params": {"key": "Enter"}},
+        {"label": "Esc", "icon": "esc", "hint": "Esc", "action": "keypress", "params": {"key": "Escape"}}
+      ],
+      "dials": [
+        {"label": "Zoom", "action": "zoom", "value": 100, "min": 25, "max": 400, "step": 5, "mode": "range", "params": {}},
+        {"label": "Rotate", "action": "custom", "value": 0, "min": -180, "max": 180, "step": 1, "mode": "endless", "params": {"command": "rotate"}}
       ]
     }
   ]
