@@ -88,21 +88,27 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                     device = null
                     notificationsOn = false
                     hostStep = "none"
-                    // Re-arm the GATT server before re-advertising. On
-                    // Android 11 the server frequently refuses the next
-                    // connection (ECONNREFUSED) when we re-advertise right
-                    // away, and stale service state can leave a host
-                    // paired-but-dead. A short settle delay + service
-                    // re-registration clears both.
+                    // Re-arm after a short settle (Android 11 refuses the
+                    // next connection if we re-advertise immediately), but
+                    // NEVER tear down services while a host may be
+                    // reconnecting: a host that catches the server
+                    // mid-rebuild sees an empty GATT database and caches
+                    // it (BlueZ does exactly this), which permanently
+                    // breaks the HID handshake for that device. If a host
+                    // is connected again by then, services are intact —
+                    // just re-advertise.
                     handler.postDelayed({
-                        if (bluetoothOn) {
+                        if (!bluetoothOn) return@postDelayed
+                        if (device == null) {
                             try {
                                 gattServer?.clearServices()
                                 buildServices()
-                            } catch (_: Exception) { }
-                            startAdvertising()
+                            } catch (e: Exception) {
+                                Log.w("DeskPadHID", "re-arm failed: ${e.message}")
+                            }
                         }
-                    }, 1500)
+                        startAdvertising()
+                    }, 300)
                     pushStatus()
                 }
             }
