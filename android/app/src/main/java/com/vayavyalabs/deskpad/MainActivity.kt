@@ -94,6 +94,18 @@ class MainActivity : Activity() {
         hid?.start()
     }
 
+    // On Android 12+ the runtime prompt (esp. BLUETOOTH_ADVERTISE) can
+    // still be unanswered when the delayed start() fires — retry once the
+    // decision lands.
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1) hid?.start()
+    }
+
     override fun onDestroy() {
         hid?.stop()
         restoreBtName()
@@ -130,7 +142,8 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 31) {
             val needed = listOf(
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_ADVERTISE
             ).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
             if (needed.isNotEmpty()) requestPermissions(needed.toTypedArray(), 1)
         }

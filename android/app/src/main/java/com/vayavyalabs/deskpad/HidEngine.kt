@@ -1,5 +1,6 @@
 package com.vayavyalabs.deskpad
 
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCharacteristic
@@ -12,7 +13,10 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ParcelUuid
@@ -77,8 +81,21 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     device = null
                     notificationsOn = false
-                    // Go back to advertising so the host can re-pair.
-                    if (bluetoothOn) startAdvertising()
+                    // Re-arm the GATT server before re-advertising. On
+                    // Android 11 the server frequently refuses the next
+                    // connection (ECONNREFUSED) when we re-advertise right
+                    // away, and stale service state can leave a host
+                    // paired-but-dead. A short settle delay + service
+                    // re-registration clears both.
+                    handler.postDelayed({
+                        if (bluetoothOn) {
+                            try {
+                                gattServer?.clearServices()
+                                buildServices()
+                            } catch (_: Exception) { }
+                            startAdvertising()
+                        }
+                    }, 1500)
                     pushStatus()
                 }
             }
@@ -90,7 +107,20 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             offset: Int,
             chr: BluetoothGattCharacteristic
         ) {
-            gattServer?.sendResponse(dev, requestId, BluetoothGatt.GATT_SUCCESS, offset, chr.value)
+            // Support Read Blob (offset) reads: respond with the slice
+            // from the requested offset, never the full value again —
+            // a host doing offset reads (low-MTU fallback) must see the
+            // tail, and a shorter-than-chunk tail terminates the read.
+            // A characteristic we never assigned a value to reads back
+            // as empty rather than null.
+            val full = chr.value ?: ByteArray(0)
+            val value =
+                if (offset > 0 && offset < full.size) full.copyOfRange(offset, full.size) else full
+            try {
+                gattServer?.sendResponse(dev, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
+            } catch (_: Exception) {
+                // Host went away mid-request; the disconnect path recovers.
+            }
         }
 
         override fun onCharacteristicWriteRequest(
@@ -136,9 +166,11 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
 
     // `lazy` breaks the mutual reference with serverCallback (whose
     // callbacks read `gattServer`), which the type checker rejects inline.
+    @Volatile private var serverOpen = false
     private val gattServer: BluetoothGattServer? by lazy {
         adapter?.let {
             try {
+                serverOpen = true
                 bluetoothManager.openGattServer(appContext, serverCallback)
             } catch (_: Exception) {
                 null
@@ -160,8 +192,23 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         }
     }
 
+    /**
+     * Re-advertise when Bluetooth is switched on after launch (e.g. the
+     * user opens the pad first, then flips BT on) — without this the pad
+     * sits silent until the app is restarted.
+     */
+    private val btReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            bluetoothOn = state == BluetoothAdapter.STATE_ON
+            if (bluetoothOn) startAdvertising() else pushStatus()
+        }
+    }
+
     init {
         buildServices()
+        appContext.registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
     // ------------------------------------------------------------------
@@ -175,6 +222,15 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
 
     fun stop() {
         stopAdvertising()
+        try {
+            appContext.unregisterReceiver(btReceiver)
+        } catch (_: Exception) { }
+        if (serverOpen) {
+            try {
+                gattServer?.close()
+            } catch (_: Exception) { }
+            serverOpen = false
+        }
         workerThread.quitSafely()
     }
 
@@ -264,12 +320,14 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             propRead or propWrite,
             byteArrayOf(0x01)
         ))
-        // Input report (NOTIFY) — the reports we send to the host
+        // Input report (NOTIFY) — the reports we send to the host.
+        // Carries a valid all-zero keyboard report so a read never
+        // sees a null value (some Android versions mishandle that).
         val input = char(
             UUID_INPUT_REPORT,
             permRead,
             propRead or propNotify,
-            byteArrayOf()
+            keyboard(0)
         )
         input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, 0))
         inputCharacteristic = input
