@@ -36,3 +36,5 @@ android/build/
 
 # Release signing key — never commit
 android/keystore/
+# stray downloaded packages
+*.deb
