@@ -181,6 +181,28 @@ def release_link(mac: str) -> None:
         pass
 
 
+def dump_db(client) -> None:
+    log("GATT database as seen by this host:")
+    try:
+        for svc in client.services:
+            log(f"  service {svc.uuid}")
+            for c in svc.characteristics:
+                log(f"    char {c.uuid} {sorted(getattr(c, 'properties', []))}")
+    except Exception as ex:
+        log(f"  (dump failed: {ex})")
+
+
+def find_char(client, uuid_short: str):
+    """Find a characteristic by short UUID across all services (robust to
+    how the stack normalized the full UUID)."""
+    target = uuid_short.lower().replace("-", "")
+    for svc in client.services:
+        for c in svc.characteristics:
+            if c.uuid.lower().replace("-", "") == target:
+                return c
+    return None
+
+
 async def run_client(mac: str) -> None:
     pad = Pad()
     log(f"connecting to {mac} …")
@@ -189,24 +211,27 @@ async def run_client(mac: str) -> None:
         await client.connect()
         log("GATT connected")
 
-        try:
-            hid_info = await client.read_gatt_char(HID_INFO)
-        except Exception:
-            # Almost always: a stale/empty service cache on this host
-            # (BlueZ cached a mid-rebuild empty DB earlier) or the pad
-            # app is not running on the tablet.
+        dump_db(client)
+
+        hid_info_chr = find_char(client, HID_INFO)
+        if hid_info_chr is None:
             raise RuntimeError(
-                "HID service not found — on the PC: forget 'DeskPad' and re-pair; "
-                "on the tablet: force-close and reopen DeskPad"
+                "HID info (2a4a) not in the connected DB — the tablet app's "
+                "GATT server is serving an empty service table. Force-close "
+                "and reopen DeskPad on the tablet, then retry."
             )
+        hid_info = await client.read_gatt_char(hid_info_chr.uuid)
         log(f"HID info: {bytes(hid_info).hex(' ')} (bcdHID {hid_info[0] | hid_info[1] << 8:#04x})")
 
-        report_map = await client.read_gatt_char(REPORT_MAP)
-        log(f"report map: {len(report_map)} bytes OK")
+        report_map_chr = find_char(client, REPORT_MAP)
+        report_map = await client.read_gatt_char(report_map_chr.uuid) if report_map_chr else b""
+        log(f"report map: {len(report_map)} bytes")
 
         # Consumer-initiated protocol: reports carry report IDs.
-        await client.write_gatt_char(PROTOCOL_MODE, b"\x01", response=False)
-        log("protocol mode: consumer-initiated")
+        protocol_chr = find_char(client, PROTOCOL_MODE)
+        if protocol_chr is not None:
+            await client.write_gatt_char(protocol_chr.uuid, b"\x01", response=False)
+            log("protocol mode: consumer-initiated")
 
         def on_report(_uuid: str, data: bytearray) -> None:
             if not data:
@@ -228,7 +253,10 @@ async def run_client(mac: str) -> None:
             except Exception as ex:
                 log(f"inject error: {ex}")
 
-        if not client.start_notify(INPUT_REPORT, on_report):
+        input_chr = find_char(client, INPUT_REPORT)
+        if input_chr is None:
+            raise RuntimeError("input report (2a22) not in the connected DB")
+        if not client.start_notify(input_chr.uuid, on_report):
             raise RuntimeError("could not subscribe to input report (CCCD write failed)")
         log("input report subscribed — DeskPad is LIVE. Press keys on the tablet!")
 
@@ -250,41 +278,43 @@ def main() -> None:
     ap.add_argument("--name", default=DEVICE_NAME)
     args = ap.parse_args()
 
-    mac = args.mac
-    if not mac:
+    # The tablet's advertised address changes whenever it re-advertises
+    # (Android re-randomizes), so with a fixed --mac we retry that;
+    # otherwise we re-scan on every cycle.
+    fixed_mac = args.mac
+
+    async def _find(timeout: float = 10.0):
         from bleak import BleakScanner
 
         # Filter by the HID service UUID: the pad's app GATT server
         # advertises 0x1812, but the tablet's adapter-level discoverable
         # advertisement (same name, no services) must not match.
-        async def _find():
-            found = {}
+        found = {}
 
-            def cb(dev, adv):
-                name = (adv.local_name or "").lower()
-                if args.name.lower() in name:
-                    found[dev.address] = dev
+        def cb(dev, adv):
+            name = (adv.local_name or "").lower()
+            if args.name.lower() in name:
+                found[dev.address] = dev
 
-            scanner = BleakScanner(with_services=["1812"], detection_callback=cb)
-            await scanner.start()
-            try:
-                await asyncio.sleep(12)
-            finally:
-                await scanner.stop()
-            return next(iter(found.values()), None)
-
-        dev = asyncio.run(_find())
-        if not dev:
-            sys.exit(
-                f"could not find '{args.name}' advertising the HID service — "
-                "is the DeskPad app open and its pill showing 'pair DeskPad…'?\n"
-                "Re-run with --mac AA:BB:CC:DD:EE:FF to force an address"
-            )
-        mac = dev.address
-        log(f"found {args.name} at {mac} (HID service advertised)")
+        scanner = BleakScanner(with_services=["1812"], detection_callback=cb)
+        await scanner.start()
+        try:
+            await asyncio.sleep(timeout)
+        finally:
+            await scanner.stop()
+        return next(iter(found.values()), None)
 
     while True:
         try:
+            mac = fixed_mac
+            if mac is None:
+                dev = asyncio.run(_find())
+                if dev is None:
+                    log(f"'{args.name}' not advertising (yet) — is the app open with the amber pill?")
+                    time.sleep(4)
+                    continue
+                mac = dev.address
+            log(f"target: {mac} (HID service advertised)")
             release_link(mac)
             asyncio.run(run_client(mac))
         except KeyboardInterrupt:

@@ -198,18 +198,42 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         }
     }
 
-    // `lazy` breaks the mutual reference with serverCallback (whose
-    // callbacks read `gattServer`), which the type checker rejects inline.
-    @Volatile private var serverOpen = false
-    private val gattServer: BluetoothGattServer? by lazy {
-        adapter?.let {
-            try {
-                serverOpen = true
-                bluetoothManager.openGattServer(appContext, serverCallback)
-            } catch (_: Exception) {
-                null
-            }
+    // NOTE: a null server is fatal for HID — the app would keep
+    // advertising (advertiser is independent) while every host connection
+    // lands on the ANDROID SYSTEM GATT server (Generic Access + Device
+    // Info, demands pairing, no HID service). We must therefore log and
+    // expose the open failure instead of swallowing it.
+    private var gattServer: BluetoothGattServer? = null
+    @Volatile private var gattsError: String? = null
+    @Volatile private var serverRetries = 0
+
+    /** Open the GATT server (idempotent, retryable). */
+    private fun openServer() {
+        if (gattServer != null) return
+        val a = adapter
+        if (a == null) {
+            gattsError = "no-bt-adapter"
+            pushStatus()
+            return
         }
+        try {
+            val s = bluetoothManager.openGattServer(appContext, serverCallback)
+            if (s != null) {
+                gattServer = s
+                gattsError = null
+                serverRetries = 0
+                buildServices()
+                Log.d("DeskPadHID", "GATT server open; services registered")
+            } else {
+                gattsError = "openGattServer-returned-null"
+                Log.w("DeskPadHID", "openGattServer returned null")
+            }
+        } catch (e: Exception) {
+            gattsError = (e.javaClass.simpleName +
+                (e.message?.let { ": " + it } ?: "")).replace("\"", "'")
+            Log.e("DeskPadHID", "openGattServer failed", e)
+        }
+        pushStatus()
     }
 
     private val advertiser = adapter?.getBluetoothLeAdvertiser()
@@ -257,7 +281,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     }
 
     init {
-        buildServices()
+        openServer()
         appContext.registerReceiver(btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
@@ -266,6 +290,14 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     // ------------------------------------------------------------------
 
     fun start() {
+        // Keep trying to open the GATT server: the stack may not be
+        // ready at first launch (boot, BT just enabled, state left over
+        // from a previous instance). Each app resume gives it another
+        // chance.
+        if (gattServer == null && serverRetries < 20) {
+            serverRetries++
+            handler.postDelayed({ openServer() }, (500L * serverRetries).coerceAtMost(5000L))
+        }
         if (bluetoothOn) startAdvertising()
         else pushStatus()
     }
@@ -275,11 +307,11 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         try {
             appContext.unregisterReceiver(btReceiver)
         } catch (_: Exception) { }
-        if (serverOpen) {
+        if (gattServer != null) {
             try {
                 gattServer?.close()
             } catch (_: Exception) { }
-            serverOpen = false
+            gattServer = null
         }
         workerThread.quitSafely()
     }
@@ -297,7 +329,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         }
         val name = (d?.name ?: DEVICE_NAME).replace("\\", "\\\\").replace("\"", "\\\"")
         val adv = advError?.toString() ?: "ok"
-        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\",\"adv\":\"$adv\"}"
+        val gatts = gattsError ?: "ok"
+        return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\",\"adv\":\"$adv\",\"gatts\":\"$gatts\"}"
     }
 
     fun isReady(): Boolean = device != null && notificationsOn

@@ -872,25 +872,26 @@ function updateBtStatus(s) {
   chip.hidden = !NATIVE;
   if (!NATIVE) return;
   const text = $('#bt-status-text');
+  const gatts = s.gatts && s.gatts !== 'ok' ? '  ·  gatts ' + s.gatts : '';
   chip.classList.remove('ok', 'warn', 'err');
   if (s.state === 'ready') {
     chip.classList.add('ok');
-    text.textContent = 'Bluetooth: connected';
+    text.textContent = 'Bluetooth: connected' + gatts;
   } else if (s.state === 'connected' || s.state === 'advertising') {
     chip.classList.add('warn');
-    text.textContent = s.state === 'connected'
+    text.textContent = (s.state === 'connected'
       ? 'Bluetooth: host connected — ' +
         (s.step && s.step !== 'connected' && s.step !== 'none'
           ? s.step
           : 'waiting for HID setup…')
-      : 'Bluetooth: pair DeskPad with your computer';
+      : 'Bluetooth: pair DeskPad with your computer') + gatts;
   } else {
     chip.classList.add('err');
-    text.textContent = s.state === 'bluetooth-off'
+    text.textContent = (s.state === 'bluetooth-off'
       ? 'Bluetooth: off on tablet'
       : s.state === 'idle'
         ? `Bluetooth: not advertising (adv ${s.adv ?? '?'})`
-        : 'Bluetooth: unavailable';
+        : 'Bluetooth: unavailable') + gatts;
   }
 }
 
