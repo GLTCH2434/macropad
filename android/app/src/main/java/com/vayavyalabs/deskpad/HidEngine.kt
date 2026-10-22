@@ -103,12 +103,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                     handler.postDelayed({
                         if (!bluetoothOn) return@postDelayed
                         if (device == null) {
-                            try {
-                                gattServer?.clearServices()
-                                buildServices()
-                            } catch (e: Exception) {
-                                Log.w("DeskPadHID", "re-arm failed: ${e.message}")
-                            }
+                            registerServices(0)
                         }
                         startAdvertising()
                     }, 300)
@@ -222,8 +217,10 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                 gattServer = s
                 gattsError = null
                 serverRetries = 0
-                buildServices()
-                Log.d("DeskPadHID", "GATT server open; services registered")
+                // On some Android builds addService silently fails when
+                // called immediately after open (server not ready yet).
+                // Give it a beat, then register + VERIFY + retry.
+                handler.postDelayed({ registerServices(0) }, 500)
             } else {
                 gattsError = "openGattServer-returned-null"
                 Log.w("DeskPadHID", "openGattServer returned null")
@@ -381,6 +378,42 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     // ------------------------------------------------------------------
     // GATT server setup
     // ------------------------------------------------------------------
+
+    /**
+     * Register the services and VERIFY the HID service actually landed
+     * (addService can silently no-op on a not-ready server — that is
+     * exactly what left the pad serving only the framework's
+     * auto-added services). Retries with backoff until present or
+     * exhausted; the outcome is exposed as gattsError for the pill.
+     */
+    private fun registerServices(retries: Int = 0) {
+        val server = gattServer ?: return
+        val alreadyThere =
+            try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
+        if (alreadyThere) {
+            gattsError = null
+            pushStatus()
+            return
+        }
+        try {
+            buildServices()
+        } catch (e: Exception) {
+            Log.w("DeskPadHID", "buildServices threw: ${e.message}")
+        }
+        val present =
+            try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
+        if (present) {
+            gattsError = null
+            Log.d("DeskPadHID", "HID service registered (attempt $retries)")
+        } else {
+            gattsError = if (retries >= 15) "services-not-registered" else "re-registering($retries)"
+            Log.w("DeskPadHID", "HID service NOT registered (retry $retries)")
+            if (retries < 15) {
+                handler.postDelayed({ registerServices(retries + 1) }, 1000)
+            }
+        }
+        pushStatus()
+    }
 
     private fun buildServices() {
         val server = gattServer ?: return
