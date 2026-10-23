@@ -453,19 +453,25 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
 
         val hid = BluetoothGattService(UUID_HID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
 
+        // CRITICAL: the BluetoothGattCharacteristic constructor is
+        // (uuid, PROPERTIES, PERMISSIONS) — properties FIRST. An earlier
+        // build passed them swapped, which put permission bits into the
+        // properties mask (0x0006 = an invalid property combination) and
+        // the stack silently refused the entire HID service while the
+        // read-only Device Info service (swap invisible) registered fine.
         // HID information: bcdHID 1.11, country 0x00, flags 0x00 (no virtual cable)
         hid.addCharacteristic(char(
-            UUID_HID_INFO, permRead, propRead, byteArrayOf(0x11, 0x01, 0x00, 0x00)
+            UUID_HID_INFO, propRead, permRead, byteArrayOf(0x11, 0x01, 0x00, 0x00)
         ))
         // Report map: composite keyboard + consumer + mouse
         hid.addCharacteristic(char(
-            UUID_REPORT_MAP, permRead, propRead, ReportMap.BYTES
+            UUID_REPORT_MAP, propRead, permRead, ReportMap.BYTES
         ))
         // Protocol mode: 1 = consumer-initiated (reports carry report IDs)
         hid.addCharacteristic(char(
             UUID_PROTOCOL_MODE,
-            permRead or permWrite,
             propRead or propWrite,
+            permRead or permWrite,
             byteArrayOf(0x01)
         ))
         // Input report (NOTIFY) — the reports we send to the host.
@@ -473,11 +479,11 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         // sees a null value (some Android versions mishandle that).
         val input = char(
             UUID_INPUT_REPORT,
-            permRead,
             propRead or propNotify,
+            permRead,
             keyboard(0)
         )
-        input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, 0))
+        input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, permWrite))
         inputCharacteristic = input
         hid.addCharacteristic(input)
         return hid
@@ -489,8 +495,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         // version 0x0100, sub-type 1, sub-id 1, sub-ver 1
         deviceInfo.addCharacteristic(char(
             UUID_PNP,
-            BluetoothGattCharacteristic.PERMISSION_READ,
             BluetoothGattCharacteristic.PROPERTY_READ,
+            BluetoothGattCharacteristic.PERMISSION_READ,
             byteArrayOf(0x0C, 0x02, 0x34, 0x12, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01)
         ))
         return deviceInfo
@@ -498,11 +504,12 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
 
     private fun char(
         uuid: UUID,
-        permissions: Int,
         properties: Int,
+        permissions: Int,
         value: ByteArray
     ): BluetoothGattCharacteristic {
-        val c = BluetoothGattCharacteristic(uuid, permissions, properties)
+        // Constructor order is (uuid, PROPERTIES, PERMISSIONS).
+        val c = BluetoothGattCharacteristic(uuid, properties, permissions)
         if (value.isNotEmpty()) c.value = value
         return c
     }

@@ -49,12 +49,7 @@ object ReportMap {
         0x26, 0xFF, 0x03, // Logical Maximum (1023)
         0x75, 0x10, //   Report Size (16)
         0x95, 0x01, //   Report Count (1)
-        0x81, 0x00, //   Input (Data, Array)                   -- consumer usage
-        0x15, 0x00, //   Logical Minimum (0)
-        0x25, 0x01, //   Logical Maximum (1)
-        0x75, 0x01, //   Report Size (1)
-        0x95, 0x08, //   Report Count (8)
-        0x81, 0x02, //   Input (Data, Variable, Absolute)      -- meta bytes
+        0x81, 0x00, //   Input (Data, Array)                   -- 16-bit usage
         0xC0,       //   End Collection
 
         // ======================= Mouse (Report ID 3) =====================

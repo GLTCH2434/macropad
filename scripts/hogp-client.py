@@ -187,7 +187,15 @@ def dump_db(client) -> None:
         for svc in client.services:
             log(f"  service {svc.uuid}")
             for c in svc.characteristics:
-                log(f"    char {c.uuid} {sorted(getattr(c, 'properties', []))}")
+                line = f"    char {c.uuid} {sorted(getattr(c, 'properties', []))}"
+                if "2a50" in c.uuid.lower():
+                    # PnP ID value — lets us tell the app's Device Info
+                    # (vendor 0x1234) from Android's system one.
+                    try:
+                        line += f" value={bytes(await client.read_gatt_char(c.uuid)).hex(' ')}"
+                    except Exception as ex:
+                        line += f" (read failed: {ex})"
+                log(line)
     except Exception as ex:
         log(f"  (dump failed: {ex})")
 
