@@ -397,37 +397,28 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     }
 
     /**
-     * Register the services. addService failures are surfaced in the pill
-     * (previously they only went to logcat, which the user cannot see);
-     * retries with backoff until the HID service is verifiably present.
+     * Register the ONE service that matters: the HID service.
+     * (The optional Device Info service was dropped in v11 — on this
+     * Android 11 build every extra addService is another chance for the
+     * stack to choke, and the host does not require 0x180A. HOGP only
+     * needs 0x1812.) addService failures are surfaced in the pill.
      */
     private fun registerServices(retries: Int = 0) {
         val server = gattServer ?: return
         val present = registeredUuids()
-        if (UUID_HID in present && UUID_DEVICE_INFO in present) {
+        if (UUID_HID in present) {
             gattsError = null
             pushStatus()
             return
         }
-        // Add only what is missing — never clearServices (observed on this
-        // build: clear + re-add drops one of the two services).
-        if (UUID_HID !in present) {
-            try {
-                server.addService(buildHidService())
-            } catch (e: Exception) {
-                gattsError = ("add-hid " + e.javaClass.simpleName +
-                    (e.message?.let { ": " + it } ?: "")).replace("\"", "'").take(80)
-                Log.w("DeskPadHID", "addService(HID) threw: $gattsError")
-                pushStatus()
-                return
-            }
-        }
-        if (UUID_DEVICE_INFO !in present) {
-            try {
-                server.addService(buildDeviceInfoService())
-            } catch (e: Exception) {
-                Log.w("DeskPadHID", "addService(DeviceInfo) threw: ${e.message}")
-            }
+        try {
+            server.addService(buildHidService())
+        } catch (e: Exception) {
+            gattsError = ("add-hid " + e.javaClass.simpleName +
+                (e.message?.let { ": " + it } ?: "")).replace("\"", "'").take(80)
+            Log.w("DeskPadHID", "addService(HID) threw: $gattsError")
+            pushStatus()
+            return
         }
         val presentNow = registeredUuids()
         if (UUID_HID in presentNow) {
@@ -487,19 +478,6 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         inputCharacteristic = input
         hid.addCharacteristic(input)
         return hid
-    }
-
-    private fun buildDeviceInfoService(): BluetoothGattService {
-        val deviceInfo = BluetoothGattService(UUID_DEVICE_INFO, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-        // PnP ID LTV: len 0x0C, vendor source 0x02, vendor 0x1234, product 0x0001,
-        // version 0x0100, sub-type 1, sub-id 1, sub-ver 1
-        deviceInfo.addCharacteristic(char(
-            UUID_PNP,
-            BluetoothGattCharacteristic.PROPERTY_READ,
-            BluetoothGattCharacteristic.PERMISSION_READ,
-            byteArrayOf(0x0C, 0x02, 0x34, 0x12, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01)
-        ))
-        return deviceInfo
     }
 
     private fun char(

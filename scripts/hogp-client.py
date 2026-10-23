@@ -181,7 +181,7 @@ def release_link(mac: str) -> None:
         pass
 
 
-def dump_db(client) -> None:
+async def dump_db(client) -> None:
     log("GATT database as seen by this host:")
     try:
         for svc in client.services:
@@ -219,7 +219,7 @@ async def run_client(mac: str) -> None:
         await client.connect()
         log("GATT connected")
 
-        dump_db(client)
+        await dump_db(client)
 
         hid_info_chr = find_char(client, HID_INFO)
         if hid_info_chr is None:
