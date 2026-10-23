@@ -49,6 +49,27 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         val UUID_PNP = UUID.fromString("00002a50-0000-1000-8000-00805f9b34fb")
         val UUID_CCCD = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+        // v13 candidates. v12 proved every characteristic PATTERN this
+        // service uses is accepted (190-byte value, notify+CCCD, read|write,
+        // multi-characteristic — all landed), while the standard 0x1812
+        // service is silently refused. So the poison is a UUID: either the
+        // 0x1812 service UUID or the standard 0x2Axx characteristic UUIDs.
+        // Three layouts are registered at once; the host-side dump picks
+        // the winner and v14 ships only that one:
+        //   X: 0x1812 + custom characteristic UUIDs (0xFFF1-0xFFF4)
+        //   Y: 0xFFE0 + standard 0x2A4A/2A4B/2A4E/2A22 characteristics
+        //   Z: 0xFFE6 + custom characteristics, keyboard-only report map
+        val X_INFO = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
+        val X_MAP = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb")
+        val X_MODE = UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb")
+        val X_IN = UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")
+        val SVC_Y = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
+        val SVC_Z = UUID.fromString("0000ffe6-0000-1000-8000-00805f9b34fb")
+        val Z_INFO = UUID.fromString("0000ffe7-0000-1000-8000-00805f9b34fb")
+        val Z_MAP = UUID.fromString("0000ffe8-0000-1000-8000-00805f9b34fb")
+        val Z_MODE = UUID.fromString("0000ffe9-0000-1000-8000-00805f9b34fb")
+        val Z_IN = UUID.fromString("0000ffea-0000-1000-8000-00805f9b34fb")
+
         /** Report IDs (consumer-initiated protocol — required for a composite device). */
         const val REPORT_KEYBOARD = 1
         const val REPORT_CONSUMER = 2
@@ -403,131 +424,93 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
      * stack to choke, and the host does not require 0x180A. HOGP only
      * needs 0x1812.) addService failures are surfaced in the pill.
      */
-    /**
-     * v12 diagnostics: register probe services (custom 0xFFEx UUIDs)
-     * BEFORE the HID service, so the host-side GATT dump shows exactly
-     * which characteristic pattern this Android 11 build accepts:
-     *   P1 0xFFE1 — one READ characteristic carrying the 190-byte report map
-     *   P2 0xFFE3 — READ|NOTIFY + CCCD descriptor (the input-report pattern)
-     *   P3 0xFFE5 — one READ|WRITE characteristic
-     *   P4 0xFFE7 — two READ characteristics (multi-characteristic service)
-     * Whichever probes are missing from the served DB name the pattern the
-     * stack refuses. Removed once 0x1812 registers cleanly.
-     */
-    private var probesAdded = false
+    private var candidatesAdded = false
+    /** Which candidate layout actually registered (diagnostic, shown in pill). */
+    @Volatile private var candidate: String? = null
 
-    private fun buildProbeServices(): List<BluetoothGattService> {
-        fun u(x: Int) = UUID.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", x))
+    /**
+     * Register the three candidate HID-like services. v12 proved every
+     * characteristic pattern is accepted, so the rejection is UUID-based:
+     * X tests the standard characteristic UUIDs under 0x1812, Y tests the
+     * standard 0x1812 service UUID itself, Z is a size control (small
+     * keyboard-only map). Whichever appears in the served DB is the live
+     * channel — the app points inputCharacteristic at it and the host
+     * daemon targets the same one (Y > X > Z priority on both sides).
+     */
+    private fun registerServices(retries: Int = 0) {
+        val server = gattServer ?: return
+        if (!candidatesAdded) {
+            candidatesAdded = true
+            val xSvc = buildHidLike(UUID_HID, X_INFO, X_MAP, X_MODE, X_IN, ReportMap.BYTES)
+            val ySvc = buildHidLike(SVC_Y, UUID_HID_INFO, UUID_REPORT_MAP, UUID_PROTOCOL_MODE, UUID_INPUT_REPORT, ReportMap.BYTES)
+            val zSvc = buildHidLike(SVC_Z, Z_INFO, Z_MAP, Z_MODE, Z_IN, ReportMap.KEYBOARD_ONLY)
+            for (c in listOf(xSvc, ySvc, zSvc)) {
+                try {
+                    server.addService(c)
+                    Log.d("DeskPadHID", "candidate ${c.uuid} added")
+                } catch (e: Exception) {
+                    Log.w("DeskPadHID", "candidate ${c.uuid} threw: ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }
+            val present = registeredUuids()
+            candidate = when {
+                SVC_Y in present -> "Y"
+                UUID_HID in present -> "X"
+                SVC_Z in present -> "Z"
+                else -> null
+            }
+            // The input (notify) characteristic is the last one added.
+            val winner = when (candidate) {
+                "Y" -> ySvc
+                "X" -> xSvc
+                "Z" -> zSvc
+                else -> null
+            }
+            inputCharacteristic = winner?.characteristics?.lastOrNull()
+        }
+        if (candidate != null) {
+            gattsError = "svc-$candidate"
+            Log.i("DeskPadHID", "HID-like service registered: candidate $candidate")
+        } else if (retries < 4) {
+            gattsError = "no-hid-like($retries)"
+            Log.w("DeskPadHID", "no candidate registered (retry $retries)")
+            handler.postDelayed({ registerServices(retries + 1) }, 1500)
+        } else {
+            gattsError = "no-hid-like"
+            Log.w("DeskPadHID", "no candidate registered after retries")
+        }
+        pushStatus()
+    }
+
+    /**
+     * A HID-shaped service (info, report map, protocol mode, input) under
+     * arbitrary UUIDs — the shape is what the daemon speaks, the UUIDs are
+     * whatever this stack will accept.
+     */
+    private fun buildHidLike(
+        svcUuid: UUID,
+        infoUuid: UUID,
+        mapUuid: UUID,
+        modeUuid: UUID,
+        inUuid: UUID,
+        reportMap: ByteArray
+    ): BluetoothGattService {
         val PR = BluetoothGattCharacteristic.PROPERTY_READ
         val PW = BluetoothGattCharacteristic.PROPERTY_WRITE
         val PN = BluetoothGattCharacteristic.PROPERTY_NOTIFY
         val MR = BluetoothGattCharacteristic.PERMISSION_READ
         val MW = BluetoothGattCharacteristic.PERMISSION_WRITE
-        return listOf(
-            BluetoothGattService(u(0xFFE1), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-                addCharacteristic(char(u(0xFFE2), PR, MR, ReportMap.BYTES))
-            },
-            BluetoothGattService(u(0xFFE3), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-                val c = char(u(0xFFE4), PR or PN, MR, keyboard(0))
-                c.addDescriptor(BluetoothGattDescriptor(u(0x2902), MW))
-                addCharacteristic(c)
-            },
-            BluetoothGattService(u(0xFFE5), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-                addCharacteristic(char(u(0xFFE6), PR or PW, MR or MW, byteArrayOf(0x01)))
-            },
-            BluetoothGattService(u(0xFFE7), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-                addCharacteristic(char(u(0xFFE8), PR, MR, byteArrayOf(0xDE.toByte(), 0xAD.toByte())))
-                addCharacteristic(char(u(0xFFE9), PR, MR, byteArrayOf(0xBE.toByte(), 0xEF.toByte())))
-            }
-        )
-    }
-
-    private fun registerServices(retries: Int = 0) {
-        val server = gattServer ?: return
-        if (!probesAdded) {
-            probesAdded = true
-            buildProbeServices().forEach { probe ->
-                try {
-                    server.addService(probe)
-                    Log.d("DeskPadHID", "probe ${probe.uuid} added")
-                } catch (e: Exception) {
-                    Log.w("DeskPadHID", "probe ${probe.uuid} threw: ${e.javaClass.simpleName}: ${e.message}")
-                }
-            }
-        }
-        val present = registeredUuids()
-        if (UUID_HID in present) {
-            gattsError = null
-            pushStatus()
-            return
-        }
-        try {
-            server.addService(buildHidService())
-        } catch (e: Exception) {
-            gattsError = ("add-hid " + e.javaClass.simpleName +
-                (e.message?.let { ": " + it } ?: "")).replace("\"", "'").take(80)
-            Log.w("DeskPadHID", "addService(HID) threw: $gattsError")
-            pushStatus()
-            return
-        }
-        val presentNow = registeredUuids()
-        if (UUID_HID in presentNow) {
-            gattsError = null
-            Log.d("DeskPadHID", "HID service present (retry $retries)")
-        } else if (retries < 8) {
-            gattsError = "re-registering($retries)"
-            Log.w("DeskPadHID", "HID not registered after addService (retry $retries; ${presentNow.size} svc)")
-            handler.postDelayed({ registerServices(retries + 1) }, 1500)
-        } else {
-            gattsError = "services-not-registered"
-            Log.w("DeskPadHID", "HID never registered after 8 retries")
-        }
-        pushStatus()
-    }
-
-    private fun buildHidService(): BluetoothGattService {
-        val permRead = BluetoothGattCharacteristic.PERMISSION_READ
-        val permWrite = BluetoothGattCharacteristic.PERMISSION_WRITE
-        val propRead = BluetoothGattCharacteristic.PROPERTY_READ
-        val propWrite = BluetoothGattCharacteristic.PROPERTY_WRITE
-        val propNotify = BluetoothGattCharacteristic.PROPERTY_NOTIFY
-
-        val hid = BluetoothGattService(UUID_HID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
-
-        // CRITICAL: the BluetoothGattCharacteristic constructor is
-        // (uuid, PROPERTIES, PERMISSIONS) — properties FIRST. An earlier
-        // build passed them swapped, which put permission bits into the
-        // properties mask (0x0006 = an invalid property combination) and
-        // the stack silently refused the entire HID service while the
-        // read-only Device Info service (swap invisible) registered fine.
-        // HID information: bcdHID 1.11, country 0x00, flags 0x00 (no virtual cable)
-        hid.addCharacteristic(char(
-            UUID_HID_INFO, propRead, permRead, byteArrayOf(0x11, 0x01, 0x00, 0x00)
-        ))
-        // Report map: composite keyboard + consumer + mouse
-        hid.addCharacteristic(char(
-            UUID_REPORT_MAP, propRead, permRead, ReportMap.BYTES
-        ))
-        // Protocol mode: 1 = consumer-initiated (reports carry report IDs)
-        hid.addCharacteristic(char(
-            UUID_PROTOCOL_MODE,
-            propRead or propWrite,
-            permRead or permWrite,
-            byteArrayOf(0x01)
-        ))
-        // Input report (NOTIFY) — the reports we send to the host.
-        // Carries a valid all-zero keyboard report so a read never
-        // sees a null value (some Android versions mishandle that).
-        val input = char(
-            UUID_INPUT_REPORT,
-            propRead or propNotify,
-            permRead,
-            keyboard(0)
-        )
-        input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, permWrite))
-        inputCharacteristic = input
-        hid.addCharacteristic(input)
-        return hid
+        val svc = BluetoothGattService(svcUuid, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+        // bcdHID 1.11, country 0x00, flags 0x00
+        svc.addCharacteristic(char(infoUuid, PR, MR, byteArrayOf(0x11, 0x01, 0x00, 0x00)))
+        svc.addCharacteristic(char(mapUuid, PR, MR, reportMap))
+        // protocol mode: 1 = consumer-initiated (reports carry report IDs)
+        svc.addCharacteristic(char(modeUuid, PR or PW, MR or MW, byteArrayOf(0x01)))
+        // input report (NOTIFY) — the reports we send to the host
+        val input = char(inUuid, PR or PN, MR, keyboard(0))
+        input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, MW))
+        svc.addCharacteristic(input)
+        return svc
     }
 
     private fun char(
@@ -569,15 +552,20 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
                 .setTimeout(0) // advertise until stopped
                 .build()
-            // HID service UUID in the advertisement so hosts recognize us
-            // as a BLE keyboard; the adapter's name is included too.
+            // Candidate service UUIDs in the advertisement so the host
+            // filter matches whichever layout the stack accepted (X=1812,
+            // Y=FFE0, Z=FFE6); the adapter's name is included too.
             val data = AdvertiseData.Builder()
                 .setIncludeDeviceName(true)
                 .addServiceUuid(ParcelUuid(UUID_HID))
+                .addServiceUuid(ParcelUuid(SVC_Y))
+                .addServiceUuid(ParcelUuid(SVC_Z))
                 .build()
             val scanResponse = AdvertiseData.Builder()
                 .setIncludeDeviceName(true)
                 .addServiceUuid(ParcelUuid(UUID_HID))
+                .addServiceUuid(ParcelUuid(SVC_Y))
+                .addServiceUuid(ParcelUuid(SVC_Z))
                 .build()
             try {
                 adv.startAdvertising(settings, data, scanResponse, advCallback)

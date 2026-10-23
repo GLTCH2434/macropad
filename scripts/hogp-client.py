@@ -162,11 +162,17 @@ class Pad:
 # GATT client
 # ---------------------------------------------------------------------------
 
-HID_SVC = "1812"
-HID_INFO = "2a4a"
-REPORT_MAP = "2a4b"
-PROTOCOL_MODE = "2a4e"
-INPUT_REPORT = "2a22"
+# Candidate HID-like layouts (v13). This Android 11 build silently refuses
+# the standard 0x1812 service while accepting every pattern and every
+# custom-UUID service, so the app registers three UUID layouts at once;
+# the daemon targets whichever one landed, in the SAME priority order the
+# app uses for its input channel: Y > X > Z.
+CANDIDATES = [
+    # (service uuid, info, report map, protocol mode, input)
+    ("ffe0", "2a4a", "2a4b", "2a4e", "2a22"),  # Y: standard chars, custom service
+    ("1812", "fff1", "fff2", "fff3", "fff4"),  # X: custom chars, standard service
+    ("ffe6", "ffe7", "ffe8", "ffe9", "ffea"),  # Z: all custom, small keyboard map
+]
 
 
 def release_link(mac: str) -> None:
@@ -221,26 +227,32 @@ async def run_client(mac: str) -> None:
 
         await dump_db(client)
 
-        hid_info_chr = find_char(client, HID_INFO)
-        if hid_info_chr is None:
-            # Keep the link up so the tablet's status pill can be read
-            # while we are connected (does the app see this connection?).
-            log("HID info (2a4a) missing — holding link 25 s for pill observation…")
-            await asyncio.sleep(25)
+        # Pick the candidate layout that actually registered (Y > X > Z —
+        # same priority the app uses for its input channel).
+        svc_uuids = {s.uuid.lower().replace("-", "")[-4:] for s in client.services}
+        cand = next((c for c in CANDIDATES if c[0] in svc_uuids), None)
+        if cand is None:
             raise RuntimeError(
-                "HID info (2a4a) not in the connected DB — the tablet app's "
-                "GATT server is serving an empty service table. Force-close "
-                "and reopen DeskPad on the tablet, then retry."
+                "no HID-like candidate service in the connected DB (tried "
+                + ", ".join(c[0] for c in CANDIDATES)
+                + ") — the tablet app's GATT server is serving only framework "
+                "services. Force-close and reopen DeskPad on the tablet, then retry."
             )
+        _, info_u, map_u, mode_u, in_u = cand
+        log(f"using candidate layout: service {cand[0]} (input char {in_u})")
+
+        hid_info_chr = find_char(client, info_u)
+        if hid_info_chr is None:
+            raise RuntimeError(f"HID info ({info_u}) not in the connected DB")
         hid_info = await client.read_gatt_char(hid_info_chr.uuid)
         log(f"HID info: {bytes(hid_info).hex(' ')} (bcdHID {hid_info[0] | hid_info[1] << 8:#04x})")
 
-        report_map_chr = find_char(client, REPORT_MAP)
+        report_map_chr = find_char(client, map_u)
         report_map = await client.read_gatt_char(report_map_chr.uuid) if report_map_chr else b""
         log(f"report map: {len(report_map)} bytes")
 
         # Consumer-initiated protocol: reports carry report IDs.
-        protocol_chr = find_char(client, PROTOCOL_MODE)
+        protocol_chr = find_char(client, mode_u)
         if protocol_chr is not None:
             await client.write_gatt_char(protocol_chr.uuid, b"\x01", response=False)
             log("protocol mode: consumer-initiated")
@@ -265,9 +277,9 @@ async def run_client(mac: str) -> None:
             except Exception as ex:
                 log(f"inject error: {ex}")
 
-        input_chr = find_char(client, INPUT_REPORT)
+        input_chr = find_char(client, in_u)
         if input_chr is None:
-            raise RuntimeError("input report (2a22) not in the connected DB")
+            raise RuntimeError(f"input report ({in_u}) not in the connected DB")
         if not client.start_notify(input_chr.uuid, on_report):
             raise RuntimeError("could not subscribe to input report (CCCD write failed)")
         log("input report subscribed — DeskPad is LIVE. Press keys on the tablet!")
@@ -308,7 +320,7 @@ def main() -> None:
             if args.name.lower() in name:
                 found[dev.address] = dev
 
-        scanner = BleakScanner(with_services=["1812"], detection_callback=cb)
+        scanner = BleakScanner(with_services=["1812", "ffe0", "ffe6"], detection_callback=cb)
         await scanner.start()
         try:
             await asyncio.sleep(timeout)

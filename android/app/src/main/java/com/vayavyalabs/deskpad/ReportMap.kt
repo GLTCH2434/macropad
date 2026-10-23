@@ -82,4 +82,35 @@ object ReportMap {
         0xC0,       //   End Collection
         0xC0        //   End Collection
     )
+
+    /**
+     * Keyboard-only (boot format) report map — 57 bytes. Used by
+     * candidate Z as a size control: if only the small map registers
+     * while the 190-byte composite map does not, the rejection is a
+     * value-size limit, not a UUID reservation.
+     */
+    val KEYBOARD_ONLY: ByteArray = hex(
+        0x05, 0x01, //   Usage Page (Generic Desktop)
+        0x09, 0x06, //   Usage (Keyboard)
+        0xA1, 0x01, //   Collection (Application)
+        0x85, 0x01, //   Report ID (1)
+        0x05, 0x07, //   Usage Page (Keyboard/Keypad)
+        0x19, 0x00, //   Usage Minimum (0)
+        0x29, 0xFF, //   Usage Maximum (255)
+        0x15, 0x00, //   Logical Minimum (0)
+        0x25, 0x01, //   Logical Maximum (1)
+        0x75, 0x01, //   Report Size (1)
+        0x95, 0x08, //   Report Count (8)
+        0x81, 0x02, //   Input (Data, Variable, Absolute)      -- modifiers
+        0x75, 0x01, //   Report Size (1)
+        0x95, 0x01, //   Report Count (1)
+        0x81, 0x01, //   Input (Constant)                      -- reserved
+        0x75, 0x01, //   Report Size (1)
+        0x95, 0x05, //   Report Count (5)
+        0x81, 0x01, //   Input (Constant)                      -- reserved
+        0x75, 0x08, //   Report Size (8)
+        0x95, 0x06, //   Report Count (6)
+        0x81, 0x00, //   Input (Data, Array)                   -- 6 keycodes
+        0xC0        //   End Collection
+    )
 }
