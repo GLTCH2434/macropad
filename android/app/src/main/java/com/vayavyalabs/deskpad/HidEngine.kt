@@ -403,8 +403,58 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
      * stack to choke, and the host does not require 0x180A. HOGP only
      * needs 0x1812.) addService failures are surfaced in the pill.
      */
+    /**
+     * v12 diagnostics: register probe services (custom 0xFFEx UUIDs)
+     * BEFORE the HID service, so the host-side GATT dump shows exactly
+     * which characteristic pattern this Android 11 build accepts:
+     *   P1 0xFFE1 — one READ characteristic carrying the 190-byte report map
+     *   P2 0xFFE3 — READ|NOTIFY + CCCD descriptor (the input-report pattern)
+     *   P3 0xFFE5 — one READ|WRITE characteristic
+     *   P4 0xFFE7 — two READ characteristics (multi-characteristic service)
+     * Whichever probes are missing from the served DB name the pattern the
+     * stack refuses. Removed once 0x1812 registers cleanly.
+     */
+    private var probesAdded = false
+
+    private fun buildProbeServices(): List<BluetoothGattService> {
+        fun u(x: Int) = UUID.fromString(String.format("0000%04x-0000-1000-8000-00805f9b34fb", x))
+        val PR = BluetoothGattCharacteristic.PROPERTY_READ
+        val PW = BluetoothGattCharacteristic.PROPERTY_WRITE
+        val PN = BluetoothGattCharacteristic.PROPERTY_NOTIFY
+        val MR = BluetoothGattCharacteristic.PERMISSION_READ
+        val MW = BluetoothGattCharacteristic.PERMISSION_WRITE
+        return listOf(
+            BluetoothGattService(u(0xFFE1), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+                addCharacteristic(char(u(0xFFE2), PR, MR, ReportMap.BYTES))
+            },
+            BluetoothGattService(u(0xFFE3), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+                val c = char(u(0xFFE4), PR or PN, MR, keyboard(0))
+                c.addDescriptor(BluetoothGattDescriptor(u(0x2902), MW))
+                addCharacteristic(c)
+            },
+            BluetoothGattService(u(0xFFE5), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+                addCharacteristic(char(u(0xFFE6), PR or PW, MR or MW, byteArrayOf(0x01)))
+            },
+            BluetoothGattService(u(0xFFE7), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+                addCharacteristic(char(u(0xFFE8), PR, MR, byteArrayOf(0xDE, 0xAD)))
+                addCharacteristic(char(u(0xFFE9), PR, MR, byteArrayOf(0xBE, 0xEF)))
+            }
+        )
+    }
+
     private fun registerServices(retries: Int = 0) {
         val server = gattServer ?: return
+        if (!probesAdded) {
+            probesAdded = true
+            buildProbeServices().forEach { probe ->
+                try {
+                    server.addService(probe)
+                    Log.d("DeskPadHID", "probe ${probe.uuid} added")
+                } catch (e: Exception) {
+                    Log.w("DeskPadHID", "probe ${probe.uuid} threw: ${e.javaClass.simpleName}: ${e.message}")
+                }
+            }
+        }
         val present = registeredUuids()
         if (UUID_HID in present) {
             gattsError = null
