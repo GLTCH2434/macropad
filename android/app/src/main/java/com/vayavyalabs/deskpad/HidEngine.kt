@@ -436,8 +436,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                 addCharacteristic(char(u(0xFFE6), PR or PW, MR or MW, byteArrayOf(0x01)))
             },
             BluetoothGattService(u(0xFFE7), BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
-                addCharacteristic(char(u(0xFFE8), PR, MR, byteArrayOf(0xDE, 0xAD)))
-                addCharacteristic(char(u(0xFFE9), PR, MR, byteArrayOf(0xBE, 0xEF)))
+                addCharacteristic(char(u(0xFFE8), PR, MR, byteArrayOf(0xDE.toByte(), 0xAD.toByte())))
+                addCharacteristic(char(u(0xFFE9), PR, MR, byteArrayOf(0xBE.toByte(), 0xEF.toByte())))
             }
         )
     }
