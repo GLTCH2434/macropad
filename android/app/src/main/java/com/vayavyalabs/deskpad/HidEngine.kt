@@ -102,9 +102,9 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
                     // just re-advertise.
                     handler.postDelayed({
                         if (!bluetoothOn) return@postDelayed
-                        if (device == null) {
-                            registerServices(0)
-                        }
+                        // Services are left untouched (clear+re-add has been
+                        // observed to drop the HID service on this build);
+                        // a reconnected host simply needs advertising back.
                         startAdvertising()
                     }, 300)
                     pushStatus()
@@ -388,43 +388,46 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
      */
     private fun registerServices(retries: Int = 0) {
         val server = gattServer ?: return
-        val alreadyThere =
+        val hidPresent =
             try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
-        if (alreadyThere) {
+        val diPresent =
+            try { server.getService(UUID_DEVICE_INFO) != null } catch (_: Exception) { false }
+        if (hidPresent && diPresent) {
             gattsError = null
             pushStatus()
             return
         }
+        // NEVER clearServices here: on this device clear + re-add drops the
+        // first-added service (observed: deviceInfo registered, HID gone
+        // after every disconnect re-arm). Add only what is missing.
         try {
-            buildServices()
+            if (!diPresent) server.addService(buildDeviceInfoService())
+            if (!hidPresent) server.addService(buildHidService())
         } catch (e: Exception) {
-            Log.w("DeskPadHID", "buildServices threw: ${e.message}")
+            Log.w("DeskPadHID", "addService threw: ${e.message}")
         }
-        val present =
+        val hidNow =
             try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
-        if (present) {
+        if (hidNow) {
             gattsError = null
-            Log.d("DeskPadHID", "HID service registered (attempt $retries)")
+            Log.d("DeskPadHID", "HID service present (retry $retries)")
         } else {
-            gattsError = if (retries >= 15) "services-not-registered" else "re-registering($retries)"
-            Log.w("DeskPadHID", "HID service NOT registered (retry $retries)")
-            if (retries < 15) {
-                handler.postDelayed({ registerServices(retries + 1) }, 1000)
+            gattsError = if (retries >= 8) "services-not-registered" else "re-registering($retries)"
+            Log.w("DeskPadHID", "HID not registered (retry $retries; hid=$hidPresent di=$diPresent)")
+            if (retries < 8) {
+                handler.postDelayed({ registerServices(retries + 1) }, 1500)
             }
         }
         pushStatus()
     }
 
-    private fun buildServices() {
-        val server = gattServer ?: return
-        server.clearServices()
+    private fun buildHidService(): BluetoothGattService {
         val permRead = BluetoothGattCharacteristic.PERMISSION_READ
         val permWrite = BluetoothGattCharacteristic.PERMISSION_WRITE
         val propRead = BluetoothGattCharacteristic.PROPERTY_READ
         val propWrite = BluetoothGattCharacteristic.PROPERTY_WRITE
         val propNotify = BluetoothGattCharacteristic.PROPERTY_NOTIFY
 
-        // --- HID service -------------------------------------------------
         val hid = BluetoothGattService(UUID_HID, BluetoothGattService.SERVICE_TYPE_PRIMARY)
 
         // HID information: bcdHID 1.11, country 0x00, flags 0x00 (no virtual cable)
@@ -454,18 +457,20 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         input.addDescriptor(BluetoothGattDescriptor(UUID_CCCD, 0))
         inputCharacteristic = input
         hid.addCharacteristic(input)
+        return hid
+    }
 
-        server.addService(hid)
-
-        // --- Device information service -----------------------------------
+    private fun buildDeviceInfoService(): BluetoothGattService {
         val deviceInfo = BluetoothGattService(UUID_DEVICE_INFO, BluetoothGattService.SERVICE_TYPE_PRIMARY)
         // PnP ID LTV: len 0x0C, vendor source 0x02, vendor 0x1234, product 0x0001,
         // version 0x0100, sub-type 1, sub-id 1, sub-ver 1
         deviceInfo.addCharacteristic(char(
-            UUID_PNP, permRead, propRead,
+            UUID_PNP,
+            BluetoothGattCharacteristic.PERMISSION_READ,
+            BluetoothGattCharacteristic.PROPERTY_READ,
             byteArrayOf(0x0C, 0x02, 0x34, 0x12, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01)
         ))
-        server.addService(deviceInfo)
+        return deviceInfo
     }
 
     private fun char(
@@ -491,6 +496,15 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
         }
         handler.post {
             if (advertising) return@post
+            // Clear zombie state before starting: force-killed instances
+            // can leave the stack's advertiser slot occupied, which makes
+            // the next startAdvertising fail with ALREADY_STARTED /
+            // TOO_MANY_ADVERTISERS. A stop first is a no-op when we are
+            // not actually advertising.
+            try {
+                adv.stopAdvertising(advCallback)
+            } catch (_: Exception) { }
+            advertising = false
             val settings = AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
                 .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
