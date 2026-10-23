@@ -215,6 +215,10 @@ async def run_client(mac: str) -> None:
 
         hid_info_chr = find_char(client, HID_INFO)
         if hid_info_chr is None:
+            # Keep the link up so the tablet's status pill can be read
+            # while we are connected (does the app see this connection?).
+            log("HID info (2a4a) missing — holding link 25 s for pill observation…")
+            await asyncio.sleep(25)
             raise RuntimeError(
                 "HID info (2a4a) not in the connected DB — the tablet app's "
                 "GATT server is serving an empty service table. Force-close "

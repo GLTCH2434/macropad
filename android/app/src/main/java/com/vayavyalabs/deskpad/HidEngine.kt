@@ -67,8 +67,8 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     @Volatile private var inputCharacteristic: BluetoothGattCharacteristic? = null
     /** Furthest HID handshake step the host has reached (diagnostic). */
     @Volatile private var hostStep = "none"
-    /** Last advertising failure code (null = healthy). Shown in the pill. */
-    @Volatile private var advError: Int? = null
+    /** Last advertising failure (null = healthy). Shown in the pill. */
+    @Volatile private var advError: String? = null
     @Volatile private var advRetries = 0
 
     private val workerThread = HandlerThread("deskpad-hid").apply { start() }
@@ -246,7 +246,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
 
         override fun onStartFailure(errorCode: Int) {
             advertising = false
-            advError = errorCode
+            advError = errorCode.toString()
             Log.w("DeskPadHID", "advertising failed: code=$errorCode (retry #$advRetries)")
             pushStatus()
             // Self-heal: one failure (stale advertiser state after an app
@@ -325,7 +325,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             else -> "bluetooth-off"
         }
         val name = (d?.name ?: DEVICE_NAME).replace("\\", "\\\\").replace("\"", "\\\"")
-        val adv = advError?.toString() ?: "ok"
+        val adv = (advError ?: "ok").replace("\"", "'")
         val gatts = gattsError ?: "ok"
         return "{\"state\":\"$state\",\"name\":\"$name\",\"ready\":$ready,\"step\":\"$hostStep\",\"adv\":\"$adv\",\"gatts\":\"$gatts\"}"
     }
@@ -380,43 +380,66 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     // ------------------------------------------------------------------
 
     /**
-     * Register the services and VERIFY the HID service actually landed
-     * (addService can silently no-op on a not-ready server — that is
-     * exactly what left the pad serving only the framework's
-     * auto-added services). Retries with backoff until present or
-     * exhausted; the outcome is exposed as gattsError for the pill.
+     * Set of service UUIDs the server currently holds, via getServices().
+     * On this Android 11 build getService(uuid) returned null for services
+     * that were in fact registered, which made the pad spin on
+     * "re-registering" forever; the host-side DB dump is the ground truth
+     * and getServices() matches it better than getService(uuid) does.
+     */
+    private fun registeredUuids(): Set<UUID> {
+        val server = gattServer ?: return emptySet()
+        return try {
+            server.getServices().mapTo(HashSet()) { it.uuid }
+        } catch (e: Exception) {
+            Log.w("DeskPadHID", "getServices threw: ${e.javaClass.simpleName}: ${e.message}")
+            emptySet()
+        }
+    }
+
+    /**
+     * Register the services. addService failures are surfaced in the pill
+     * (previously they only went to logcat, which the user cannot see);
+     * retries with backoff until the HID service is verifiably present.
      */
     private fun registerServices(retries: Int = 0) {
         val server = gattServer ?: return
-        val hidPresent =
-            try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
-        val diPresent =
-            try { server.getService(UUID_DEVICE_INFO) != null } catch (_: Exception) { false }
-        if (hidPresent && diPresent) {
+        val present = registeredUuids()
+        if (UUID_HID in present && UUID_DEVICE_INFO in present) {
             gattsError = null
             pushStatus()
             return
         }
-        // NEVER clearServices here: on this device clear + re-add drops the
-        // first-added service (observed: deviceInfo registered, HID gone
-        // after every disconnect re-arm). Add only what is missing.
-        try {
-            if (!diPresent) server.addService(buildDeviceInfoService())
-            if (!hidPresent) server.addService(buildHidService())
-        } catch (e: Exception) {
-            Log.w("DeskPadHID", "addService threw: ${e.message}")
+        // Add only what is missing — never clearServices (observed on this
+        // build: clear + re-add drops one of the two services).
+        if (UUID_HID !in present) {
+            try {
+                server.addService(buildHidService())
+            } catch (e: Exception) {
+                gattsError = ("add-hid " + e.javaClass.simpleName +
+                    (e.message?.let { ": " + it } ?: "")).replace("\"", "'").take(80)
+                Log.w("DeskPadHID", "addService(HID) threw: $gattsError")
+                pushStatus()
+                return
+            }
         }
-        val hidNow =
-            try { server.getService(UUID_HID) != null } catch (_: Exception) { false }
-        if (hidNow) {
+        if (UUID_DEVICE_INFO !in present) {
+            try {
+                server.addService(buildDeviceInfoService())
+            } catch (e: Exception) {
+                Log.w("DeskPadHID", "addService(DeviceInfo) threw: ${e.message}")
+            }
+        }
+        val presentNow = registeredUuids()
+        if (UUID_HID in presentNow) {
             gattsError = null
             Log.d("DeskPadHID", "HID service present (retry $retries)")
+        } else if (retries < 8) {
+            gattsError = "re-registering($retries)"
+            Log.w("DeskPadHID", "HID not registered after addService (retry $retries; ${presentNow.size} svc)")
+            handler.postDelayed({ registerServices(retries + 1) }, 1500)
         } else {
-            gattsError = if (retries >= 8) "services-not-registered" else "re-registering($retries)"
-            Log.w("DeskPadHID", "HID not registered (retry $retries; hid=$hidPresent di=$diPresent)")
-            if (retries < 8) {
-                handler.postDelayed({ registerServices(retries + 1) }, 1500)
-            }
+            gattsError = "services-not-registered"
+            Log.w("DeskPadHID", "HID never registered after 8 retries")
         }
         pushStatus()
     }
@@ -491,6 +514,7 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
     private fun startAdvertising() {
         val adv = advertiser
         if (adv == null) {
+            advError = "no-advertiser"
             pushStatus()
             return
         }
@@ -523,10 +547,20 @@ class HidEngine(context: Context, private val statusListener: (String) -> Unit) 
             try {
                 adv.startAdvertising(settings, data, scanResponse, advCallback)
                 // onStartSuccess/onStartFailure flip `advertising`.
-            } catch (_: SecurityException) {
+            } catch (e: Exception) {
+                // A THROWN startAdvertising (denied runtime permission on
+                // API 31+, stack busy) was previously swallowed here and the
+                // pad sat idle forever. Surface it and retry, exactly like a
+                // callback failure does.
+                if (advertising) return@post // "already advertising" — fine.
+                Log.w("DeskPadHID", "startAdvertising threw: ${e.javaClass.simpleName}: ${e.message}")
+                advError = e.javaClass.simpleName
                 pushStatus()
-            } catch (_: IllegalStateException) {
-                // Already advertising.
+                if (bluetoothOn) {
+                    val delay = (1000L * (advRetries + 1)).coerceAtMost(8000L)
+                    advRetries++
+                    handler.postDelayed({ startAdvertising() }, delay)
+                }
             }
         }
     }

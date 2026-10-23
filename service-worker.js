@@ -8,7 +8,7 @@
 
 // Bump the version whenever app assets change so installed PWAs
 // drop their stale cache on activate.
-const CACHE_NAME = 'deskpad-v9';
+const CACHE_NAME = 'deskpad-v10';
 const ASSETS = [
   '/index.html',
   '/app.js',
